@@ -227,11 +227,81 @@ textarea{resize:vertical;min-height:70px;}
   .app-shell{grid-template-columns:1fr!important;}
   .sidebar{display:none!important;}
 }
+
+/* ── LOGIN SCREEN ── */
+#loginScreen{position:fixed;inset:0;background:var(--bg);z-index:9999;
+  display:flex;align-items:center;justify-content:center;padding:20px;}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:36px 32px;width:100%;max-width:380px;
+  box-shadow:0 8px 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;gap:20px;
+  animation:fadeUp .3s ease;}
+.login-logo{display:flex;align-items:center;gap:12px;}
+.login-logo-icon{width:44px;height:44px;background:var(--accent);border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+.login-title h2{font-size:18px;font-weight:600;margin-bottom:2px;}
+.login-title p{font-size:11px;color:var(--text-muted);font-family:var(--mono);}
+.login-field label{font-size:11px;font-family:var(--mono);text-transform:uppercase;
+  letter-spacing:.6px;color:var(--text-muted);display:block;margin-bottom:6px;}
+.login-input-wrap{position:relative;}
+.login-input-wrap input{width:100%;padding:12px 44px 12px 13px;font-size:15px;
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);outline:none;font-family:var(--sans);
+  -webkit-appearance:none;transition:border-color .15s,box-shadow .15s;}
+.login-input-wrap input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
+.login-input-wrap input.shake{animation:shake .4s ease;}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.toggle-pw{position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:2px;}
+.login-btn{width:100%;padding:13px;background:var(--accent);color:#fff;border:none;
+  border-radius:8px;font-size:15px;font-weight:600;font-family:var(--sans);
+  cursor:pointer;transition:background .15s,transform .1s;}
+.login-btn:hover{background:var(--accent2);}
+.login-btn:active{transform:scale(.98);}
+.login-error{font-size:13px;color:var(--danger);text-align:center;
+  background:var(--danger-light);border:1px solid rgba(201,64,64,.3);
+  border-radius:7px;padding:9px;display:none;}
+.login-error.show{display:block;animation:fadeUp .2s ease;}
+.login-hint{font-size:11px;color:var(--text-dim);text-align:center;font-family:var(--mono);}
+.login-footer{display:flex;align-items:center;gap:8px;justify-content:center;}
+.login-footer-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);}
+#appContent{display:none;}
+
 #printTable{display:none;}
 .loading-msg{padding:28px;text-align:center;color:var(--text-dim);font-family:var(--mono);font-size:12px;}
 </style>
 </head>
 <body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-icon">🔧</div>
+      <div class="login-title">
+        <h2>Störungsbuch</h2>
+        <p>Kläranlage &amp; Kanalbetrieb</p>
+      </div>
+    </div>
+    <div class="login-field">
+      <label for="loginPw">Passwort</label>
+      <div class="login-input-wrap">
+        <input type="password" id="loginPw" placeholder="Passwort eingeben …"
+          onkeydown="if(event.key==='Enter') doLogin()">
+        <button class="toggle-pw" type="button" onclick="togglePw()" title="Anzeigen">👁</button>
+      </div>
+    </div>
+    <div class="login-error" id="loginError">❌ Falsches Passwort. Bitte erneut versuchen.</div>
+    <button class="login-btn" onclick="doLogin()">Anmelden →</button>
+    <div class="login-footer">
+      <div class="login-footer-dot"></div>
+      <span class="login-hint">Zugang nur für autorisierte Mitarbeiter</span>
+      <div class="login-footer-dot"></div>
+    </div>
+  </div>
+</div>
+
+<!-- APP (wird nach Login eingeblendet) -->
+<div id="appContent">
 
 <header>
   <div class="header-left">
@@ -1054,5 +1124,51 @@ function showToast(msg,type='ok'){
 }
 window.showToast=showToast;
 </script>
+</div><!-- /appContent -->
+
+<script>
+// ══════════════════════════════════════════
+//  PASSWORT HIER ÄNDERN:
+const APP_PASSWORD = 'klaeranlage2024';
+// ══════════════════════════════════════════
+
+const SESSION_KEY = 'sb_auth';
+
+function doLogin() {
+  const pw = document.getElementById('loginPw').value;
+  if (pw === APP_PASSWORD) {
+    sessionStorage.setItem(SESSION_KEY, '1');
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appContent').style.display = 'block';
+    document.getElementById('loginError').classList.remove('show');
+  } else {
+    const inp = document.getElementById('loginPw');
+    inp.classList.add('shake');
+    inp.value = '';
+    document.getElementById('loginError').classList.add('show');
+    setTimeout(() => inp.classList.remove('shake'), 400);
+    inp.focus();
+  }
+}
+
+function togglePw() {
+  const inp = document.getElementById('loginPw');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// Auto-login if session still active
+if (sessionStorage.getItem(SESSION_KEY) === '1') {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appContent').style.display = 'block';
+}
+
+// Focus password field on load
+window.addEventListener('load', () => {
+  if (sessionStorage.getItem(SESSION_KEY) !== '1') {
+    document.getElementById('loginPw').focus();
+  }
+});
+</script>
+
 </body>
 </html>
