@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Störungsbuch – Kläranlage / Kanalbetrieb</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f5f0; --surface: #ffffff; --surface2: #eef0eb;
+    --border: #d8dbd2; --text: #1a1d16; --text-muted: #6b7060;
+    --accent: #2e6b4f; --accent-light: #d4ead9; --accent-dark: #1c4a35;
+    --warn: #c0540a; --warn-light: #fdebd9;
+    --danger: #a02020; --danger-light: #fce8e8;
+    --ok: #2e6b4f; --ok-light: #d4ead9;
+    --mono: 'DM Mono', monospace; --sans: 'DM Sans', sans-serif;
+    --radius: 10px; --shadow: 0 2px 12px rgba(0,0,0,0.07);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; font-size: 15px; }
+
+  header {
+    background: var(--accent); color: #fff; padding: 0 24px; height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-icon { font-size: 22px; }
+  header h1 { font-size: 17px; font-weight: 600; letter-spacing: 0.3px; }
+  header p { font-size: 11px; opacity: 0.7; font-family: var(--mono); margin-top: 1px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .header-badge { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; padding: 4px 12px; font-size: 12px; font-family: var(--mono); }
+  .sync-indicator { display: flex; align-items: center; gap: 6px; font-size: 12px; font-family: var(--mono); }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #4caf50; animation: pulse 2s infinite; }
+  .sync-dot.offline { background: #f44336; animation: none; }
+  .sync-dot.connecting { background: #ff9800; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* Setup Banner */
+  .setup-banner {
+    background: #fff8e1; border: 1px solid #ffd54f; border-radius: var(--radius);
+    padding: 16px 20px; display: flex; gap: 12px; align-items: flex-start;
+  }
+  .setup-banner-icon { font-size: 22px; flex-shrink: 0; }
+  .setup-banner h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; color: #e65100; }
+  .setup-banner p { font-size: 13px; color: #5d4037; line-height: 1.6; }
+  .setup-banner code { background: rgba(0,0,0,0.06); border-radius: 4px; padding: 1px 5px; font-family: var(--mono); font-size: 12px; }
+
+  .main-layout { max-width: 1100px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 20px; }
+  @media(min-width: 768px) { .main-layout { padding: 28px 24px; } }
+
+  .stats-bar { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
+  @media(min-width: 600px) { .stats-bar { grid-template-columns: repeat(4,1fr); } }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 4px; box-shadow: var(--shadow); }
+  .stat-label { font-size: 11px; color: var(--text-muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 28px; font-weight: 600; font-family: var(--mono); line-height: 1; }
+  .stat-value.red { color: var(--danger); } .stat-value.orange { color: var(--warn); } .stat-value.green { color: var(--ok); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface2); }
+  .card-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); font-family: var(--mono); }
+  .card-body { padding: 20px; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  @media(min-width: 600px) { .form-grid { grid-template-columns: 1fr 1fr; } .form-grid .full { grid-column: 1/-1; } }
+
+  label { display: flex; flex-direction: column; gap: 5px; }
+  .label-text { font-size: 12px; font-weight: 500; color: var(--text-muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.4px; }
+  input, select, textarea { font-family: var(--sans); font-size: 14px; border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; background: var(--bg); color: var(--text); outline: none; transition: border-color 0.15s, box-shadow 0.15s; width: 100%; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(46,107,79,0.12); background: #fff; }
+  textarea { resize: vertical; min-height: 80px; }
+
+  .priority-group { display: flex; gap: 8px; flex-wrap: wrap; }
+  .prio-btn { padding: 7px 14px; border-radius: 20px; border: 1.5px solid var(--border); background: transparent; font-size: 13px; font-family: var(--mono); cursor: pointer; transition: all 0.15s; color: var(--text-muted); }
+  .prio-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .prio-btn.active-low  { background: var(--ok-light);     border-color: var(--ok);     color: var(--ok);     font-weight: 600; }
+  .prio-btn.active-mid  { background: var(--warn-light);   border-color: var(--warn);   color: var(--warn);   font-weight: 600; }
+  .prio-btn.active-high { background: var(--danger-light); border-color: var(--danger); color: var(--danger); font-weight: 600; }
+
+  .btn-primary { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 11px 24px; font-size: 14px; font-weight: 600; font-family: var(--sans); cursor: pointer; transition: background 0.15s, transform 0.1s; display: flex; align-items: center; gap: 7px; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary { background: transparent; color: var(--text-muted); border: 1px solid var(--border); border-radius: 8px; padding: 9px 16px; font-size: 13px; font-family: var(--sans); cursor: pointer; transition: all 0.15s; }
+  .btn-secondary:hover { background: var(--surface2); color: var(--text); }
+  .form-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .filter-bar input { flex: 1; min-width: 180px; }
+  .filter-bar select { width: auto; min-width: 140px; }
+
+  .entry-list { display: flex; flex-direction: column; gap: 1px; }
+  .entry-item { padding: 16px 20px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: start; transition: background 0.12s; cursor: pointer; }
+  .entry-item:last-child { border-bottom: none; }
+  .entry-item:hover { background: var(--surface2); }
+
+  .prio-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .prio-dot.low { background: var(--ok); } .prio-dot.mid { background: var(--warn); } .prio-dot.high { background: var(--danger); }
+
+  .entry-main { min-width: 0; }
+  .entry-title { font-weight: 600; font-size: 14px; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .entry-meta { font-size: 12px; color: var(--text-muted); font-family: var(--mono); display: flex; gap: 12px; flex-wrap: wrap; }
+  .entry-desc { font-size: 13px; color: var(--text-muted); margin-top: 5px; line-height: 1.5; }
+  .entry-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+
+  .status-badge { font-size: 11px; font-family: var(--mono); padding: 3px 9px; border-radius: 12px; font-weight: 500; white-space: nowrap; }
+  .status-badge.offen    { background: var(--warn-light);   color: var(--warn); }
+  .status-badge.behoben  { background: var(--ok-light);     color: var(--ok); }
+  .status-badge.progress { background: #e8eaf6;             color: #3949ab; }
+
+  .btn-icon { background: transparent; border: 1px solid var(--border); border-radius: 6px; width: 30px; height: 30px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; color: var(--text-muted); }
+  .btn-icon:hover { background: var(--danger-light); border-color: var(--danger); color: var(--danger); }
+  .btn-icon.resolve:hover { background: var(--ok-light); border-color: var(--ok); color: var(--ok); }
+
+  .empty-state { padding: 48px 20px; text-align: center; color: var(--text-muted); }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; }
+
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--accent); color: #fff; padding: 12px 20px; border-radius: 9px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.2); transform: translateY(80px); opacity: 0; transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1); z-index: 999; max-width: 320px; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; align-items: center; justify-content: center; padding: 16px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: 14px; width: 100%; max-width: 520px; box-shadow: 0 8px 40px rgba(0,0,0,0.2); overflow: hidden; animation: slideUp 0.25s ease; }
+  @keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .modal-header { padding: 18px 20px; background: var(--surface2); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .modal-header h2 { font-size: 16px; font-weight: 600; }
+  .modal-body { padding: 20px; display: grid; gap: 12px; }
+  .modal-field { display: grid; gap: 3px; }
+  .modal-field-label { font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+  .modal-field-value { font-size: 14px; }
+  .modal-footer { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+  .close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); line-height: 1; }
+
+  .entry-scroll { max-height: 520px; overflow-y: auto; }
+  .entry-scroll::-webkit-scrollbar { width: 5px; }
+  .entry-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .loading-row { padding: 32px; text-align: center; color: var(--text-muted); font-family: var(--mono); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <span class="header-icon">🔧</span>
+    <div>
+      <h1>Störungsbuch</h1>
+      <p>Kläranlage &amp; Kanalbetrieb</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="sync-indicator">
+      <div class="sync-dot connecting" id="syncDot"></div>
+      <span id="syncLabel" style="display:none">Live</span>
+    </div>
+    <span class="header-badge" id="headerDate"></span>
+  </div>
+</header>
+
+<div class="main-layout">
+
+  <!-- ⚠️ SETUP BANNER – wird ausgeblendet sobald Firebase konfiguriert ist -->
+  <div class="setup-banner" id="setupBanner">
+    <div class="setup-banner-icon">⚙️</div>
+    <div>
+      <h3>Firebase-Konfiguration erforderlich</h3>
+      <p>
+        Öffne diese HTML-Datei in einem Texteditor und ersetze die Platzhalter im Abschnitt
+        <code>DEINE FIREBASE-KONFIGURATION</code> unten im &lt;script&gt;-Bereich mit deinen
+        eigenen Firebase-Zugangsdaten. Danach funktioniert die Echtzeit-Synchronisation auf
+        allen Geräten. <strong>Anleitung steht im Chat oben.</strong>
+      </p>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat-card"><div class="stat-label">Gesamt</div><div class="stat-value" id="statTotal">–</div></div>
+    <div class="stat-card"><div class="stat-label">Offen</div><div class="stat-value orange" id="statOffen">–</div></div>
+    <div class="stat-card"><div class="stat-label">In Arbeit</div><div class="stat-value" style="color:#3949ab" id="statProgress">–</div></div>
+    <div class="stat-card"><div class="stat-label">Behoben</div><div class="stat-value green" id="statBehoben">–</div></div>
+  </div>
+
+  <!-- Neue Störung -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">➕ Neue Störung erfassen</span></div>
+    <div class="card-body">
+      <div class="form-grid">
+        <label><span class="label-text">Datum &amp; Uhrzeit</span><input type="datetime-local" id="f-datetime"></label>
+        <label><span class="label-text">Melder / Mitarbeiter</span><input type="text" id="f-melder" placeholder="Name eintragen"></label>
+        <label>
+          <span class="label-text">Anlage / Bereich</span>
+          <select id="f-anlage">
+            <option value="">– Bitte wählen –</option>
+            <option>Pumpwerk Nord</option><option>Pumpwerk Süd</option>
+            <option>Hauptkläranlage</option><option>Regenbecken Ost</option>
+            <option>Regenbecken West</option><option>Zulaufbereich</option>
+            <option>Schlammbehandlung</option><option>Gebläsestation</option>
+            <option>Steuerwarte</option><option>Kanal – Abschnitt A</option>
+            <option>Kanal – Abschnitt B</option><option>Kanal – Abschnitt C</option>
+            <option>Sonstige</option>
+          </select>
+        </label>
+        <label>
+          <span class="label-text">Art der Störung</span>
+          <select id="f-art">
+            <option value="">– Bitte wählen –</option>
+            <option>Pumpenausfall</option><option>Elektrische Störung</option>
+            <option>Rohrbruch / Leckage</option><option>Überstauereignis</option>
+            <option>Messwertabweichung</option><option>Alarmanlage</option>
+            <option>Verstopfung</option><option>Maschinenschaden</option>
+            <option>EDV / Steuerung</option><option>Geruchsbelästigung</option>
+            <option>Sonstiges</option>
+          </select>
+        </label>
+        <label class="full"><span class="label-text">Kurzbeschreibung</span><input type="text" id="f-titel" placeholder="z. B. Pumpe 2 fällt aus"></label>
+        <label class="full"><span class="label-text">Detailbeschreibung</span><textarea id="f-desc" placeholder="Zusätzliche Informationen, beobachtete Symptome, erste Maßnahmen …"></textarea></label>
+        <div class="full">
+          <div class="label-text" style="margin-bottom:8px;">Priorität</div>
+          <div class="priority-group">
+            <button class="prio-btn" onclick="setPrio(this,'niedrig','active-low')">🟢 Niedrig</button>
+            <button class="prio-btn" onclick="setPrio(this,'mittel','active-mid')">🟠 Mittel</button>
+            <button class="prio-btn" onclick="setPrio(this,'hoch','active-high')">🔴 Hoch</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-actions" style="margin-top:20px;">
+        <button class="btn-primary" id="saveBtn" onclick="addEntry()">💾 Störung speichern</button>
+        <button class="btn-secondary" onclick="resetForm()">Zurücksetzen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Liste -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">📋 Störungsprotokoll</span>
+      <button class="btn-secondary" onclick="exportCSV()" style="font-size:12px;padding:6px 12px;">⬇ Export CSV</button>
+    </div>
+    <div class="card-body" style="padding-bottom:0;">
+      <div class="filter-bar">
+        <input type="text" id="filter-search" placeholder="🔍 Suchen …" oninput="renderList()">
+        <select id="filter-status" onchange="renderList()">
+          <option value="">Alle Status</option>
+          <option value="Offen">Offen</option>
+          <option value="In Arbeit">In Arbeit</option>
+          <option value="Behoben">Behoben</option>
+        </select>
+        <select id="filter-prio" onchange="renderList()">
+          <option value="">Alle Prioritäten</option>
+          <option value="hoch">Hoch</option>
+          <option value="mittel">Mittel</option>
+          <option value="niedrig">Niedrig</option>
+        </select>
+      </div>
+    </div>
+    <div class="entry-scroll">
+      <div class="entry-list" id="entryList">
+        <div class="loading-row">⏳ Verbinde mit Datenbank …</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">Störungsdetail</h2>
+      <button class="close-btn" onclick="closeModalDirect()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModalDirect()">Schließen</button>
+      <button class="btn-primary" id="modal-resolve-btn" onclick="resolveFromModal()">✔ Status weiterschalten</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, serverTimestamp }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // ════════════════════════════════════════════════════════════════
+  //  ▼▼▼  DEINE FIREBASE-KONFIGURATION – hier eintragen  ▼▼▼
+  // ════════════════════════════════════════════════════════════════
+  const firebaseConfig = {
+    apiKey:            "AIzaSyANYg_rJNix8JW-rTiTK-wYMF-sh4TCkOE",
+    authDomain:        "stoerungsbuch.firebaseapp.com",
+    projectId:         "stoerungsbuch",
+    storageBucket:     "stoerungsbuch.firebasestorage.app",
+    messagingSenderId: "76848845239",
+    appId:             "1:76848845239:web:5c4d301e475d533e025832",
+    measurementId:     "G-KV6ZRKQ0W3"
+  };
+  // ════════════════════════════════════════════════════════════════
+
+  const CONFIGURED = !firebaseConfig.apiKey.includes("DEIN");
+
+  let db, entries = [], currentPrio = '', currentModalId = null;
+
+  // Header date
+  document.getElementById('headerDate').textContent =
+    new Date().toLocaleDateString('de-DE', {weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'});
+
+  // Datetime default
+  document.getElementById('f-datetime').value = new Date().toISOString().slice(0,16);
+
+  if (!CONFIGURED) {
+    setSyncState('offline');
+    document.getElementById('entryList').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">⚙️</div><p>Firebase noch nicht konfiguriert.<br>Bitte Anleitung im Chat folgen.</p></div>`;
+    updateStats([]);
+  } else {
+    document.getElementById('setupBanner').style.display = 'none';
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    setSyncState('connecting');
+
+    const q = query(collection(db, "stoerungen"), orderBy("createdAt", "desc"));
+    onSnapshot(q, (snap) => {
+      entries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderList();
+      updateStats(entries);
+      setSyncState('online');
+    }, (err) => {
+      console.error(err);
+      setSyncState('offline');
+      showToast('⚠ Verbindungsfehler zur Datenbank', '#a02020');
+    });
+  }
+
+  function setSyncState(state) {
+    const dot = document.getElementById('syncDot');
+    const lbl = document.getElementById('syncLabel');
+    dot.className = 'sync-dot ' + (state === 'online' ? '' : state === 'offline' ? 'offline' : 'connecting');
+    lbl.style.display = state === 'online' ? 'inline' : 'none';
+  }
+
+  window.setPrio = (btn, prio, cls) => {
+    document.querySelectorAll('.prio-btn').forEach(b => b.className = 'prio-btn');
+    btn.classList.add(cls);
+    currentPrio = prio;
+  };
+
+  window.addEntry = async () => {
+    if (!CONFIGURED) { showToast('⚙ Firebase zuerst konfigurieren', '#c0540a'); return; }
+    const titel  = document.getElementById('f-titel').value.trim();
+    const anlage = document.getElementById('f-anlage').value;
+    const art    = document.getElementById('f-art').value;
+    const melder = document.getElementById('f-melder').value.trim();
+    const dt     = document.getElementById('f-datetime').value;
+    const desc   = document.getElementById('f-desc').value.trim();
+    if (!titel || !anlage || !art || !dt) { showToast('⚠ Bitte alle Pflichtfelder ausfüllen.', '#c0540a'); return; }
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true; btn.textContent = '⏳ Speichern …';
+    try {
+      await addDoc(collection(db, "stoerungen"), {
+        titel, anlage, art, melder, dt, desc,
+        prio: currentPrio || 'niedrig',
+        status: 'Offen',
+        createdAt: serverTimestamp()
+      });
+      resetForm();
+      showToast('✔ Störung gespeichert!');
+    } catch(e) {
+      showToast('❌ Fehler beim Speichern: ' + e.message, '#a02020');
+    }
+    btn.disabled = false; btn.innerHTML = '💾 Störung speichern';
+  };
+
+  window.resetForm = () => {
+    ['f-titel','f-melder','f-desc'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-anlage').value = '';
+    document.getElementById('f-art').value = '';
+    document.getElementById('f-datetime').value = new Date().toISOString().slice(0,16);
+    document.querySelectorAll('.prio-btn').forEach(b => b.className = 'prio-btn');
+    currentPrio = '';
+  };
+
+  window.deleteEntry = async (id, e) => {
+    e.stopPropagation();
+    if (!confirm('Eintrag wirklich löschen?')) return;
+    await deleteDoc(doc(db, "stoerungen", id));
+    showToast('🗑 Eintrag gelöscht.', '#a02020');
+  };
+
+  window.resolveEntry = async (id, e) => {
+    if (e) e.stopPropagation();
+    const entry = entries.find(x => x.id === id);
+    if (!entry) return;
+    const next = entry.status === 'Offen' ? 'In Arbeit' : entry.status === 'In Arbeit' ? 'Behoben' : 'Offen';
+    await updateDoc(doc(db, "stoerungen", id), { status: next });
+    showToast(`Status: ${next}`);
+  };
+
+  window.resolveFromModal = async () => {
+    if (!currentModalId) return;
+    await window.resolveEntry(currentModalId, null);
+    closeModalDirect();
+  };
+
+  function formatDt(dt) {
+    if (!dt) return '–';
+    return new Date(dt).toLocaleString('de-DE', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  }
+
+  window.openModal = (id) => {
+    const e = entries.find(x => x.id === id);
+    if (!e) return;
+    currentModalId = id;
+    const pLabels = {niedrig:'🟢 Niedrig', mittel:'🟠 Mittel', hoch:'🔴 Hoch'};
+    document.getElementById('modal-title').textContent = e.titel;
+    document.getElementById('modal-body').innerHTML = `
+      <div class="modal-field"><div class="modal-field-label">Datum & Uhrzeit</div><div class="modal-field-value">${formatDt(e.dt)}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Anlage / Bereich</div><div class="modal-field-value">${e.anlage}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Art der Störung</div><div class="modal-field-value">${e.art}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Melder</div><div class="modal-field-value">${e.melder || '–'}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Priorität</div><div class="modal-field-value">${pLabels[e.prio]||e.prio}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Status</div><div class="modal-field-value">${e.status}</div></div>
+      ${e.desc?`<div class="modal-field"><div class="modal-field-label">Beschreibung</div><div class="modal-field-value" style="white-space:pre-wrap">${e.desc}</div></div>`:''}
+    `;
+    const resolveBtn = document.getElementById('modal-resolve-btn');
+    const labels = {Offen:'🔄 In Arbeit setzen', 'In Arbeit':'✔ Als behoben markieren', Behoben:'↩ Wieder öffnen'};
+    resolveBtn.textContent = labels[e.status] || 'Status ändern';
+    document.getElementById('modalOverlay').classList.add('open');
+  };
+
+  window.closeModal = (ev) => { if (ev.target === document.getElementById('modalOverlay')) closeModalDirect(); };
+  window.closeModalDirect = () => { document.getElementById('modalOverlay').classList.remove('open'); currentModalId = null; };
+
+  window.renderList = () => {
+    const search  = document.getElementById('filter-search').value.toLowerCase();
+    const fStatus = document.getElementById('filter-status').value;
+    const fPrio   = document.getElementById('filter-prio').value;
+
+    let filtered = entries.filter(e => {
+      const ms = !search || [e.titel,e.anlage,e.art,e.melder,e.desc].some(v=>v&&v.toLowerCase().includes(search));
+      return ms && (!fStatus||e.status===fStatus) && (!fPrio||e.prio===fPrio);
+    });
+
+    const list = document.getElementById('entryList');
+    if (filtered.length === 0) {
+      list.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>${entries.length===0?'Noch keine Störungen erfasst.':'Keine Einträge für die gewählten Filter.'}</p></div>`;
+      return;
+    }
+    const prioMap   = {niedrig:'low',mittel:'mid',hoch:'high'};
+    const statMap   = {Offen:'offen','In Arbeit':'progress',Behoben:'behoben'};
+    const rlabel    = {Offen:'🔄','In Arbeit':'✔',Behoben:'↩'};
+    const rtitle    = {Offen:'In Arbeit setzen','In Arbeit':'Als behoben markieren',Behoben:'Wieder öffnen'};
+    list.innerHTML  = filtered.map(e => `
+      <div class="entry-item" onclick="openModal('${e.id}')">
+        <div class="prio-dot ${prioMap[e.prio]||'low'}"></div>
+        <div class="entry-main">
+          <div class="entry-title">${e.titel}</div>
+          <div class="entry-meta">
+            <span>📍 ${e.anlage}</span><span>⚙ ${e.art}</span>
+            <span>🕐 ${formatDt(e.dt)}</span>
+            ${e.melder?`<span>👤 ${e.melder}</span>`:''}
+          </div>
+          ${e.desc?`<div class="entry-desc">${e.desc.length>100?e.desc.slice(0,100)+'…':e.desc}</div>`:''}
+        </div>
+        <div class="entry-right">
+          <span class="status-badge ${statMap[e.status]}">${e.status}</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn-icon resolve" title="${rtitle[e.status]}" onclick="resolveEntry('${e.id}',event)">${rlabel[e.status]}</button>
+            <button class="btn-icon" title="Löschen" onclick="deleteEntry('${e.id}',event)">🗑</button>
+          </div>
+        </div>
+      </div>`).join('');
+  };
+
+  function updateStats(arr) {
+    document.getElementById('statTotal').textContent    = arr.length;
+    document.getElementById('statOffen').textContent    = arr.filter(e=>e.status==='Offen').length;
+    document.getElementById('statProgress').textContent = arr.filter(e=>e.status==='In Arbeit').length;
+    document.getElementById('statBehoben').textContent  = arr.filter(e=>e.status==='Behoben').length;
+  }
+
+  window.exportCSV = () => {
+    if (!entries.length) { showToast('Keine Daten zum Exportieren.','#c0540a'); return; }
+    const h = ['ID','Datum','Anlage','Art','Titel','Priorität','Status','Melder','Beschreibung'];
+    const rows = entries.map(e=>[e.id,formatDt(e.dt),e.anlage,e.art,e.titel,e.prio,e.status,e.melder||'',(e.desc||'').replace(/\n/g,' ')].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';'));
+    const csv  = '\uFEFF'+[h.join(';'),...rows].join('\n');
+    const a    = Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'})),download:`stoerungsbuch_${new Date().toISOString().slice(0,10)}.csv`});
+    a.click(); showToast('📥 CSV exportiert!');
+  };
+
+  function showToast(msg, color='#2e6b4f') {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.style.background = color;
+    t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'), 2800);
+  }
+  window.showToast = showToast;
+</script>
+</body>
+</html>
