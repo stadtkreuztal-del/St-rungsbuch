@@ -432,9 +432,13 @@ textarea{resize:vertical;min-height:70px;}
             </label>
             <label>
               <span class="label-text">Anlagenteil / Bereich</span>
-              <select id="f-anlagenteil">
+              <select id="f-anlagenteil" onchange="updateKanalAdresse()">
                 <option value="">– erst Anlage wählen –</option>
               </select>
+            </label>
+            <label class="full" id="f-kanal-adresse-wrap" style="display:none">
+              <span class="label-text">Adresse / Standort</span>
+              <input type="text" id="f-kanal-adresse" placeholder="z. B. Musterstraße 12, Kreuztal">
             </label>
           </div>
         </div>
@@ -452,6 +456,7 @@ textarea{resize:vertical;min-height:70px;}
                 <option>Messwertabweichung</option><option>Alarmanlage</option>
                 <option>Verstopfung</option><option>Maschinenschaden</option>
                 <option>EDV / Steuerung</option><option>Geruchsbelästigung</option>
+                <option>Rattensichtung</option>
                 <option>Sonstiges</option>
               </select>
             </label>
@@ -609,7 +614,7 @@ const ANLAGENTEIL = {
   Kanal:['RÜB','RÜ','Ratten','Verstopfung','Hausanschluss','Maschinen/Fahrzeuge']
 };
 const STOERUNGSARTEN = ['Pumpenausfall','Elektrische Störung','Rohrbruch / Leckage','Überstauereignis',
-  'Messwertabweichung','Alarmanlage','Verstopfung','Maschinenschaden','EDV / Steuerung','Geruchsbelästigung','Sonstiges'];
+  'Messwertabweichung','Alarmanlage','Verstopfung','Maschinenschaden','EDV / Steuerung','Geruchsbelästigung','Rattensichtung','Sonstiges'];
 const PRIOMAP={niedrig:'low',mittel:'mid',hoch:'high'};
 const STATMAP={Offen:'offen','In Arbeit':'progress',Behoben:'behoben'};
 const DAUERH={'1h':1,'2h':2,'4h':4,'>4h':5};
@@ -677,6 +682,13 @@ window.updateAnlagenteil=()=>{
   const s=document.getElementById('f-anlagenteil');
   s.innerHTML='<option value="">– Bitte wählen –</option>';
   (ANLAGENTEIL[a]||[]).forEach(t=>s.insertAdjacentHTML('beforeend',`<option>${t}</option>`));
+  updateKanalAdresse();
+};
+window.updateKanalAdresse=()=>{
+  const anlage=document.getElementById('f-anlage').value;
+  const teil=document.getElementById('f-anlagenteil').value;
+  const wrap=document.getElementById('f-kanal-adresse-wrap');
+  if(wrap) wrap.style.display=(anlage==='Kanal'&&teil)?'flex':'none';
 };
 window.updateMelderPersonen=(gruppeId,personId,extWrapId)=>{
   const g=document.getElementById(gruppeId).value;
@@ -713,6 +725,7 @@ window.addEntry=async()=>{
     await addDoc(collection(db,'stoerungen'),{
       nr:lfdNr,titel,anlage,
       anlagenteil:document.getElementById('f-anlagenteil').value,
+      kanalAdresse:document.getElementById('f-kanal-adresse')?.value?.trim()||'',
       art,prio:currentPrio||'niedrig',
       datum:date,zeit:time,
       desc:document.getElementById('f-desc').value.trim(),
@@ -729,7 +742,7 @@ window.addEntry=async()=>{
 };
 
 window.resetForm=()=>{
-  ['f-titel','f-desc','f-massnahmen','f-melder-extern','f-beh-extern'].forEach(id=>{
+  ['f-titel','f-desc','f-massnahmen','f-melder-extern','f-beh-extern','f-kanal-adresse'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
   ['f-anlage','f-anlagenteil','f-art','f-melder-gruppe','f-melder-person','f-beh-gruppe','f-beh-person'].forEach(id=>{
@@ -741,6 +754,7 @@ window.resetForm=()=>{
   document.getElementById('f-time').value=n.toTimeString().slice(0,5);
   document.getElementById('f-extern-wrap').style.display='none';
   document.getElementById('f-beh-extern-wrap').style.display='none';
+  const kaw=document.getElementById('f-kanal-adresse-wrap');if(kaw)kaw.style.display='none';
   document.querySelectorAll('.prio-btn').forEach(b=>b.className='prio-btn');
   document.querySelectorAll('#dauerGroup .dauer-chip').forEach(c=>c.classList.remove('selected'));
   currentPrio='';currentDauer='';
@@ -799,7 +813,11 @@ window.openEditModal=async(id)=>{
         <select id="e-anlage" onchange="editUpdateAnlagenteil()">${anlageOpts(e.anlage)}</select>
       </label>
       <label><span class="label-text">Bereich</span>
-        <select id="e-anlagenteil"><option value="">– Bitte wählen –</option>${atOpts(e.anlage,e.anlagenteil)}</select>
+        <select id="e-anlagenteil" onchange="editUpdateKanalAdresse()"><option value="">– Bitte wählen –</option>${atOpts(e.anlage,e.anlagenteil)}</select>
+      </label>
+      <label class="full" id="e-kanal-adresse-wrap" style="display:${(e.anlage==='Kanal'&&e.anlagenteil)?'flex':'none'}">
+        <span class="label-text">Adresse / Standort</span>
+        <input type="text" id="e-kanal-adresse" value="${e.kanalAdresse||''}" placeholder="z. B. Musterstraße 12, Kreuztal">
       </label>
     </div>
   </div>
@@ -870,6 +888,7 @@ window.openEditModal=async(id)=>{
 
   document.getElementById('modal-footer').innerHTML=`
     <button class="btn btn-secondary" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-secondary" onclick="printSingleEntry('${id}')">🖨 Drucken / Speichern</button>
     <button class="btn btn-primary" onclick="saveEdit('${id}')">💾 Änderungen speichern</button>`;
   document.getElementById('modalOverlay').classList.add('open');
 };
@@ -879,6 +898,13 @@ window.editUpdateAnlagenteil=()=>{
   const s=document.getElementById('e-anlagenteil');
   s.innerHTML='<option value="">– Bitte wählen –</option>';
   (ANLAGENTEIL[a]||[]).forEach(t=>s.insertAdjacentHTML('beforeend',`<option>${t}</option>`));
+  editUpdateKanalAdresse();
+};
+window.editUpdateKanalAdresse=()=>{
+  const anlage=document.getElementById('e-anlage')?.value;
+  const teil=document.getElementById('e-anlagenteil')?.value;
+  const wrap=document.getElementById('e-kanal-adresse-wrap');
+  if(wrap) wrap.style.display=(anlage==='Kanal'&&teil)?'flex':'none';
 };
 window.editUpdatePersonen=(gruppeId,personId,extId)=>{
   const g=document.getElementById(gruppeId).value;
@@ -910,6 +936,7 @@ window.saveEdit=async(id)=>{
       zeit:document.getElementById('e-time').value,
       anlage:document.getElementById('e-anlage').value,
       anlagenteil:document.getElementById('e-anlagenteil').value,
+      kanalAdresse:document.getElementById('e-kanal-adresse')?.value?.trim()||'',
       art:document.getElementById('e-art').value,
       prio:window._editPrio||'niedrig',
       desc:document.getElementById('e-desc').value.trim(),
@@ -937,6 +964,7 @@ window.openModal=(id)=>{
       <div class="detail-field"><div class="detail-label">Uhrzeit</div><div class="detail-value">${e.zeit||'–'}</div></div>
       <div class="detail-field"><div class="detail-label">Anlage</div><div class="detail-value">${e.anlage||'–'}</div></div>
       <div class="detail-field"><div class="detail-label">Bereich</div><div class="detail-value">${e.anlagenteil||'–'}</div></div>
+      ${e.kanalAdresse?`<div class="detail-field detail-full"><div class="detail-label">Adresse / Standort</div><div class="detail-value">${e.kanalAdresse}</div></div>`:''}
       <div class="detail-field"><div class="detail-label">Störungsart</div><div class="detail-value">${e.art||'–'}</div></div>
       <div class="detail-field"><div class="detail-label">Priorität</div><div class="detail-value">${prios[e.prio]||e.prio||'–'}</div></div>
       <div class="detail-field"><div class="detail-label">Status</div><div class="detail-value">${e.status||'–'}</div></div>
@@ -951,6 +979,7 @@ window.openModal=(id)=>{
   const sLabel={Offen:'🔄 In Arbeit setzen','In Arbeit':'✔ Als behoben markieren',Behoben:'↩ Wieder öffnen'};
   document.getElementById('modal-footer').innerHTML=`
     <button class="btn btn-secondary" onclick="closeModal()">Schließen</button>
+    <button class="btn btn-secondary" onclick="printSingleEntry('${id}')">🖨 Drucken / Speichern</button>
     <button class="btn btn-secondary" onclick="closeModal();openEditModal('${id}')">✏️ Bearbeiten</button>
     <button class="btn btn-primary" onclick="cycleStatus('${id}',event);closeModal()">${sLabel[e.status]||'Status'}</button>`;
   document.getElementById('modalOverlay').classList.add('open');
@@ -1013,7 +1042,7 @@ window.renderSidebar=()=>{
   if(!filtered.length){list.innerHTML=`<div class="sidebar-empty">Keine Einträge gefunden.</div>`;return;}
   list.innerHTML=filtered.map(e=>{
     const dt=e.datum?e.datum+(e.zeit?' '+e.zeit:''):fmtDt(e.dt);
-    return `<div class="sidebar-item${currentModalId===e.id?' active':''}" onclick="openModal('${e.id}')">
+    return `<div class="sidebar-item${currentModalId===e.id?' active':''}" onclick="openEditModal('${e.id}')">
       <div class="si-dot ${PRIOMAP[e.prio]||'low'}"></div>
       <div class="si-main">
         <div class="si-title">${e.titel}</div>
@@ -1040,6 +1069,53 @@ function updateStats(){
   const avg=withDauer.length>0?(withDauer.reduce((s,e)=>s+DAUERH[e.dauer],0)/withDauer.length).toFixed(1):'–';
   document.getElementById('stAvg').textContent=`Ø Dauer: ${avg==='–'?'–':avg+' h'}`;
 }
+
+// ── PRINT SINGLE ENTRY ──
+window.printSingleEntry=(id)=>{
+  const e=entries.find(x=>x.id===id);if(!e)return;
+  const nr=`STR-${String(e.nr||'?').padStart(4,'0')}`;
+  const prios={niedrig:'🟢 Niedrig',mittel:'🟠 Mittel',hoch:'🔴 Hoch'};
+  const melder=e.melderPerson?`${e.melderGruppe} · ${e.melderPerson}`:e.melderGruppe||'–';
+  const beh=e.behPerson?`${e.behGruppe} · ${e.behPerson}`:e.behGruppe||'–';
+  const win=window.open('','_blank','width=800,height=700');
+  win.document.write(`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+  <title>Störungsmeldung ${nr}</title>
+  <style>
+    body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#111;margin:0;padding:20px;}
+    h1{font-size:16px;border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:16px;}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;margin-bottom:14px;}
+    .field{display:flex;flex-direction:column;gap:2px;}
+    .label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#666;font-weight:600;}
+    .value{font-size:13px;color:#111;}
+    .full{grid-column:1/-1;}
+    .section{margin-bottom:14px;padding-top:10px;border-top:1px solid #ddd;}
+    .section-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#3d8b6e;font-weight:700;margin-bottom:8px;}
+    .textarea{white-space:pre-wrap;line-height:1.6;background:#f8f8f8;border:1px solid #ddd;border-radius:4px;padding:8px;font-size:12px;}
+    .footer{margin-top:24px;font-size:11px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:10px;}
+    @media print{button{display:none!important;}}
+  </style></head><body>
+  <h1>Störungsmeldung · ${nr}</h1>
+  <div class="grid">
+    <div class="field"><div class="label">Datum</div><div class="value">${e.datum||'–'}</div></div>
+    <div class="field"><div class="label">Uhrzeit</div><div class="value">${e.zeit||'–'}</div></div>
+    <div class="field"><div class="label">Anlage</div><div class="value">${e.anlage||'–'}</div></div>
+    <div class="field"><div class="label">Bereich</div><div class="value">${e.anlagenteil||'–'}</div></div>
+    ${e.kanalAdresse?`<div class="field full"><div class="label">Adresse / Standort</div><div class="value">${e.kanalAdresse}</div></div>`:''}
+    <div class="field"><div class="label">Störungsart</div><div class="value">${e.art||'–'}</div></div>
+    <div class="field"><div class="label">Priorität</div><div class="value">${prios[e.prio]||e.prio||'–'}</div></div>
+    <div class="field"><div class="label">Status</div><div class="value">${e.status||'–'}</div></div>
+    <div class="field"><div class="label">Dauer Behebung</div><div class="value">${e.dauer||'–'}</div></div>
+    <div class="field"><div class="label">Gemeldet durch</div><div class="value">${melder}</div></div>
+    <div class="field"><div class="label">Bearbeitet durch</div><div class="value">${beh}</div></div>
+    ${e.titel?`<div class="field full"><div class="label">Kurzbeschreibung</div><div class="value">${e.titel}</div></div>`:''}
+  </div>
+  ${e.desc?`<div class="section"><div class="section-title">Beschreibung</div><div class="textarea">${e.desc}</div></div>`:''}
+  ${e.massnahmen?`<div class="section"><div class="section-title">Durchgeführte Maßnahmen</div><div class="textarea">${e.massnahmen}</div></div>`:''}
+  <div class="footer">Störungsbuch · Kläranlage &amp; Kanalbetrieb · Ausdruck vom ${new Date().toLocaleDateString('de-DE')}</div>
+  <br><button onclick="window.print()" style="padding:8px 18px;background:#3d8b6e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">🖨 Jetzt drucken / als PDF speichern</button>
+  </body></html>`);
+  win.document.close();
+};
 
 // ── PRINT ──
 window.printEntries=()=>{
