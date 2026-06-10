@@ -210,6 +210,27 @@ textarea{resize:vertical;min-height:70px;}
 .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:140;}
 .sidebar-backdrop.show{display:block;}
 
+/* FILE UPLOAD */
+.upload-area{border:2px dashed var(--border2);border-radius:8px;padding:18px 14px;text-align:center;
+  cursor:pointer;transition:all .18s;background:var(--surface2);position:relative;}
+.upload-area:hover,.upload-area.dragover{border-color:var(--accent);background:var(--accent-glow);}
+.upload-area input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon{font-size:22px;margin-bottom:6px;}
+.upload-hint{font-size:12px;color:var(--text-muted);font-family:var(--mono);}
+.upload-hint small{display:block;font-size:10px;color:var(--text-dim);margin-top:3px;}
+.attach-list{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.attach-item{display:flex;align-items:center;gap:8px;background:var(--surface3);border:1px solid var(--border);
+  border-radius:6px;padding:7px 10px;font-size:12px;}
+.attach-item .attach-icon{font-size:16px;flex-shrink:0;}
+.attach-item .attach-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono);}
+.attach-item .attach-size{font-size:10px;color:var(--text-dim);white-space:nowrap;}
+.attach-item .attach-del{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:14px;padding:0 2px;flex-shrink:0;}
+.attach-item .attach-del:hover{color:var(--danger);}
+.attach-item a{color:var(--accent);text-decoration:none;}
+.attach-item a:hover{text-decoration:underline;}
+.upload-progress{height:3px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden;}
+.upload-progress-bar{height:100%;background:var(--accent);width:0%;transition:width .2s;}
+
 /* PRINT */
 @media print{
   .sidebar,.mobile-nav,.action-bar,.form-actions,.no-print,header .header-right{display:none!important;}
@@ -546,6 +567,17 @@ textarea{resize:vertical;min-height:70px;}
           </div>
         </div>
 
+        <!-- 06 Anhänge -->
+        <div class="form-section">
+          <div class="form-section-title">06 · Anhänge (Fotos / Dokumente)</div>
+          <div class="upload-area" id="uploadArea" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+            <input type="file" id="f-files" multiple accept="image/*,application/pdf" onchange="handleFileSelect(event)">
+            <div class="upload-icon">📎</div>
+            <div class="upload-hint">Fotos oder PDFs hier ablegen oder klicken zum Auswählen<small>JPG, PNG, GIF, PDF · max. 10 MB pro Datei</small></div>
+          </div>
+          <div class="attach-list" id="attachList"></div>
+        </div>
+
         <div class="form-actions no-print">
           <button class="btn btn-primary" id="saveBtn" onclick="addEntry()">💾 Störung speichern</button>
           <button class="btn btn-secondary" onclick="resetForm()">↺ Zurücksetzen</button>
@@ -588,6 +620,8 @@ textarea{resize:vertical;min-height:70px;}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore,collection,addDoc,onSnapshot,doc,updateDoc,deleteDoc,query,orderBy,serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 // ═══════════════════════════════════════════
 const firebaseConfig = {
@@ -619,8 +653,9 @@ const PRIOMAP={niedrig:'low',mittel:'mid',hoch:'high'};
 const STATMAP={Offen:'offen','In Arbeit':'progress',Behoben:'behoben'};
 const DAUERH={'1h':1,'2h':2,'4h':4,'>4h':5};
 
-let db, entries=[], currentPrio='', currentDauer='', currentModalId=null, lfdNr=1;
+let db, storage, entries=[], currentPrio='', currentDauer='', currentModalId=null, lfdNr=1;
 let mobileTab='list';
+let pendingFiles=[]; // {file, previewUrl, name, size}
 
 // Init
 document.getElementById('headerDate').textContent =
@@ -632,6 +667,7 @@ document.getElementById('f-time').value=now.toTimeString().slice(0,5);
 // Firebase
 const app=initializeApp(firebaseConfig);
 db=getFirestore(app);
+storage=getStorage(app);
 setSyncState('connecting');
 const q=query(collection(db,'stoerungen'),orderBy('createdAt','desc'));
 onSnapshot(q,snap=>{
@@ -707,7 +743,79 @@ window.selectDauer=(chip,val)=>{
   chip.classList.add('selected');currentDauer=val;
 };
 
-// ── Speichern ──
+// ── FILE UPLOAD HELPERS ──
+function fileIcon(name){
+  const ext=name.split('.').pop().toLowerCase();
+  if(['jpg','jpeg','png','gif','webp'].includes(ext)) return '🖼';
+  if(ext==='pdf') return '📄';
+  return '📎';
+}
+function fmtSize(bytes){
+  if(bytes<1024) return bytes+'B';
+  if(bytes<1024*1024) return (bytes/1024).toFixed(1)+'KB';
+  return (bytes/1024/1024).toFixed(1)+'MB';
+}
+function renderAttachList(){
+  const list=document.getElementById('attachList');
+  if(!list) return;
+  if(!pendingFiles.length){list.innerHTML='';return;}
+  list.innerHTML=pendingFiles.map((f,i)=>`
+    <div class="attach-item">
+      <span class="attach-icon">${fileIcon(f.name)}</span>
+      ${f.previewUrl?`<a href="${f.previewUrl}" target="_blank" class="attach-name">${f.name}</a>`:`<span class="attach-name">${f.name}</span>`}
+      <span class="attach-size">${fmtSize(f.size)}</span>
+      <button class="attach-del" onclick="removePendingFile(${i})" title="Entfernen">✕</button>
+    </div>`).join('');
+}
+window.removePendingFile=(i)=>{
+  pendingFiles.splice(i,1);
+  renderAttachList();
+};
+window.handleFileSelect=(e)=>{
+  addFiles(Array.from(e.target.files));
+  e.target.value='';
+};
+window.handleDragOver=(e)=>{
+  e.preventDefault();
+  document.getElementById('uploadArea')?.classList.add('dragover');
+};
+window.handleDragLeave=()=>{
+  document.getElementById('uploadArea')?.classList.remove('dragover');
+};
+window.handleDrop=(e)=>{
+  e.preventDefault();
+  document.getElementById('uploadArea')?.classList.remove('dragover');
+  addFiles(Array.from(e.dataTransfer.files));
+};
+function addFiles(files){
+  files.forEach(f=>{
+    if(f.size>10*1024*1024){showToast('⚠ '+f.name+' ist zu groß (max 10 MB)','err');return;}
+    const allowed=['image/jpeg','image/png','image/gif','image/webp','application/pdf'];
+    if(!allowed.includes(f.type)){showToast('⚠ Nur Bilder und PDFs erlaubt','err');return;}
+    const previewUrl=f.type.startsWith('image/')?URL.createObjectURL(f):null;
+    pendingFiles.push({file:f,name:f.name,size:f.size,previewUrl});
+  });
+  renderAttachList();
+}
+
+async function uploadFiles(stoerungId, files){
+  const urls=[];
+  for(const pf of files){
+    const path=`stoerungen/${stoerungId}/${Date.now()}_${pf.name}`;
+    const ref=storageRef(storage,path);
+    await new Promise((res,rej)=>{
+      const task=uploadBytesResumable(ref,pf.file);
+      task.on('state_changed',null,rej,async()=>{
+        const url=await getDownloadURL(task.snapshot.ref);
+        urls.push({name:pf.name,size:pf.size,url,path});
+        res();
+      });
+    });
+  }
+  return urls;
+}
+
+// ── SPEICHERN ──
 window.addEntry=async()=>{
   const titel=document.getElementById('f-titel').value.trim();
   const anlage=document.getElementById('f-anlage').value;
@@ -722,7 +830,7 @@ window.addEntry=async()=>{
   const btn=document.getElementById('saveBtn');
   btn.disabled=true;btn.textContent='⏳ Speichern…';
   try{
-    await addDoc(collection(db,'stoerungen'),{
+    const docRef=await addDoc(collection(db,'stoerungen'),{
       nr:lfdNr,titel,anlage,
       anlagenteil:document.getElementById('f-anlagenteil').value,
       kanalAdresse:document.getElementById('f-kanal-adresse')?.value?.trim()||'',
@@ -733,8 +841,15 @@ window.addEntry=async()=>{
       dauer:currentDauer,
       massnahmen:document.getElementById('f-massnahmen').value.trim(),
       status:document.getElementById('f-status').value,
-      createdAt:serverTimestamp()
+      createdAt:serverTimestamp(),
+      anhaenge:[]
     });
+    if(pendingFiles.length){
+      btn.textContent='⏳ Dateien hochladen…';
+      const uploaded=await uploadFiles(docRef.id,pendingFiles);
+      await updateDoc(docRef,{anhaenge:uploaded});
+    }
+    pendingFiles=[];
     resetForm();showToast('✔ Störung gespeichert','ok');
     if(isMobile()) showTab('list');
   }catch(e){showToast('❌ '+e.message,'err');}
@@ -758,6 +873,7 @@ window.resetForm=()=>{
   document.querySelectorAll('.prio-btn').forEach(b=>b.className='prio-btn');
   document.querySelectorAll('#dauerGroup .dauer-chip').forEach(c=>c.classList.remove('selected'));
   currentPrio='';currentDauer='';
+  pendingFiles=[];renderAttachList();
 };
 
 // ── Aktionen ──
@@ -881,16 +997,83 @@ window.openEditModal=async(id)=>{
         <textarea id="e-massnahmen">${e.massnahmen||''}</textarea>
       </label>
     </div>
+  </div>
+  <div class="edit-section">
+    <div class="edit-section-title">06 · Anhänge</div>
+    ${(e.anhaenge&&e.anhaenge.length)?`
+    <div class="attach-list" id="existingAttachList" style="margin-bottom:10px">
+      ${e.anhaenge.map((a,i)=>`
+        <div class="attach-item" id="eatt-${i}">
+          <span class="attach-icon">${fileIcon(a.name)}</span>
+          <a href="${a.url}" target="_blank" class="attach-name">${a.name}</a>
+          <span class="attach-size">${fmtSize(a.size||0)}</span>
+          <button class="attach-del" onclick="removeExistingAttach('${id}',${i})" title="Löschen">✕</button>
+        </div>`).join('')}
+    </div>`:'<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;font-family:var(--mono)">Noch keine Anhänge</div>'}
+    <div class="upload-area" id="editUploadArea" ondragover="handleEditDragOver(event)" ondragleave="handleEditDragLeave(event)" ondrop="handleEditDrop(event)">
+      <input type="file" id="e-files" multiple accept="image/*,application/pdf" onchange="handleEditFileSelect(event)">
+      <div class="upload-icon">📎</div>
+      <div class="upload-hint">Neue Anhänge hinzufügen<small>JPG, PNG, GIF, PDF · max. 10 MB</small></div>
+    </div>
+    <div class="attach-list" id="editAttachList"></div>
   </div>`;
 
   window._editPrio = e.prio||'niedrig';
   window._editDauer = e.dauer||'';
+  editPendingFiles=[];
 
   document.getElementById('modal-footer').innerHTML=`
     <button class="btn btn-secondary" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-secondary" onclick="printSingleEntry('${id}')">🖨 Drucken / Speichern</button>
     <button class="btn btn-primary" onclick="saveEdit('${id}')">💾 Änderungen speichern</button>`;
   document.getElementById('modalOverlay').classList.add('open');
+};
+
+// ── EDIT MODAL FILE HANDLING ──
+let editPendingFiles=[];
+
+window.handleEditFileSelect=(e)=>{addEditFiles(Array.from(e.target.files));e.target.value='';};
+window.handleEditDragOver=(e)=>{e.preventDefault();document.getElementById('editUploadArea')?.classList.add('dragover');};
+window.handleEditDragLeave=()=>{document.getElementById('editUploadArea')?.classList.remove('dragover');};
+window.handleEditDrop=(e)=>{e.preventDefault();document.getElementById('editUploadArea')?.classList.remove('dragover');addEditFiles(Array.from(e.dataTransfer.files));};
+
+function addEditFiles(files){
+  files.forEach(f=>{
+    if(f.size>10*1024*1024){showToast('⚠ '+f.name+' zu groß (max 10 MB)','err');return;}
+    const allowed=['image/jpeg','image/png','image/gif','image/webp','application/pdf'];
+    if(!allowed.includes(f.type)){showToast('⚠ Nur Bilder und PDFs erlaubt','err');return;}
+    const previewUrl=f.type.startsWith('image/')?URL.createObjectURL(f):null;
+    editPendingFiles.push({file:f,name:f.name,size:f.size,previewUrl});
+  });
+  renderEditAttachList();
+}
+function renderEditAttachList(){
+  const list=document.getElementById('editAttachList');
+  if(!list) return;
+  if(!editPendingFiles.length){list.innerHTML='';return;}
+  list.innerHTML=editPendingFiles.map((f,i)=>`
+    <div class="attach-item">
+      <span class="attach-icon">${fileIcon(f.name)}</span>
+      <span class="attach-name">${f.name}</span>
+      <span class="attach-size">${fmtSize(f.size)}</span>
+      <button class="attach-del" onclick="removeEditPendingFile(${i})" title="Entfernen">✕</button>
+    </div>`).join('');
+}
+window.removeEditPendingFile=(i)=>{editPendingFiles.splice(i,1);renderEditAttachList();};
+
+window.removeExistingAttach=async(docId,idx)=>{
+  if(!confirm('Anhang wirklich löschen?')) return;
+  const entry=entries.find(x=>x.id===docId);
+  if(!entry||!entry.anhaenge) return;
+  const att=entry.anhaenge[idx];
+  try{
+    if(att.path) await deleteObject(storageRef(storage,att.path));
+    const newList=[...entry.anhaenge];
+    newList.splice(idx,1);
+    await updateDoc(doc(db,'stoerungen',docId),{anhaenge:newList});
+    document.getElementById(`eatt-${idx}`)?.remove();
+    showToast('🗑 Anhang gelöscht','ok');
+  }catch(err){showToast('❌ '+err.message,'err');}
 };
 
 window.editUpdateAnlagenteil=()=>{
@@ -929,6 +1112,8 @@ window.saveEdit=async(id)=>{
   const melderPerson=melderGruppe==='Extern'?document.getElementById('e-melder-extern').value:document.getElementById('e-melder-person').value;
   const behGruppe=document.getElementById('e-beh-gruppe').value;
   const behPerson=behGruppe==='Extern'?document.getElementById('e-beh-extern').value:document.getElementById('e-beh-person').value;
+  const saveBtn=document.querySelector('#modal-footer .btn-primary');
+  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='⏳ Speichern…';}
   try{
     await updateDoc(doc(db,'stoerungen',id),{
       titel:document.getElementById('e-titel').value.trim(),
@@ -945,8 +1130,17 @@ window.saveEdit=async(id)=>{
       status:document.getElementById('e-status').value,
       massnahmen:document.getElementById('e-massnahmen').value.trim()
     });
+    if(editPendingFiles.length){
+      if(saveBtn) saveBtn.textContent='⏳ Dateien hochladen…';
+      const newUploaded=await uploadFiles(id,editPendingFiles);
+      const existingEntry=entries.find(x=>x.id===id);
+      const existing=(existingEntry?.anhaenge)||[];
+      await updateDoc(doc(db,'stoerungen',id),{anhaenge:[...existing,...newUploaded]});
+      editPendingFiles=[];
+    }
     closeModal();showToast('✔ Änderungen gespeichert','ok');
   }catch(err){showToast('❌ '+err.message,'err');}
+  if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='💾 Änderungen speichern';}
 };
 
 // ── DETAIL VIEW ──
@@ -974,6 +1168,18 @@ window.openModal=(id)=>{
     </div>
     ${e.desc?`<div class="detail-field" style="margin-bottom:10px"><div class="detail-label">Beschreibung</div><div class="detail-value" style="white-space:pre-wrap;line-height:1.6">${e.desc}</div></div>`:''}
     ${e.massnahmen?`<div class="detail-field"><div class="detail-label">Durchgeführte Maßnahmen</div><div class="detail-value" style="white-space:pre-wrap;line-height:1.6">${e.massnahmen}</div></div>`:''}
+    ${(e.anhaenge&&e.anhaenge.length)?`
+    <div class="detail-field" style="margin-top:12px">
+      <div class="detail-label">Anhänge (${e.anhaenge.length})</div>
+      <div class="attach-list" style="margin-top:6px">
+        ${e.anhaenge.map(a=>`
+          <div class="attach-item">
+            <span class="attach-icon">${fileIcon(a.name)}</span>
+            <a href="${a.url}" target="_blank" class="attach-name">${a.name}</a>
+            <span class="attach-size">${fmtSize(a.size||0)}</span>
+          </div>`).join('')}
+      </div>
+    </div>`:''}
   `;
   const statusNext={Offen:'🔄 In Arbeit',' In Arbeit':'✔ Behoben',Behoben:'↩ Öffnen'};
   const sLabel={Offen:'🔄 In Arbeit setzen','In Arbeit':'✔ Als behoben markieren',Behoben:'↩ Wieder öffnen'};
@@ -1012,6 +1218,7 @@ window.renderCards=()=>{
             <span>🕐 ${dt}</span>
             <span>👤 ${melder}</span>
             ${e.dauer?`<span>⏱ ${e.dauer}</span>`:''}
+            ${(e.anhaenge&&e.anhaenge.length)?`<span>📎 ${e.anhaenge.length} Anhang${e.anhaenge.length>1?'e':''}</span>`:''}
           </div>
           ${e.desc?`<div style="font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.5">${e.desc.length>120?e.desc.slice(0,120)+'…':e.desc}</div>`:''}
         </div>
