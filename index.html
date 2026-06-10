@@ -620,8 +620,10 @@ textarea{resize:vertical;min-height:70px;}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore,collection,addDoc,onSnapshot,doc,updateDoc,deleteDoc,query,orderBy,serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject }
-  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+// ── CLOUDINARY CONFIG ──
+const CLOUDINARY_CLOUD = 'dt4vdpvjy';
+const CLOUDINARY_PRESET = 'stoerungsbuch';
 
 // ═══════════════════════════════════════════
 const firebaseConfig = {
@@ -653,7 +655,7 @@ const PRIOMAP={niedrig:'low',mittel:'mid',hoch:'high'};
 const STATMAP={Offen:'offen','In Arbeit':'progress',Behoben:'behoben'};
 const DAUERH={'1h':1,'2h':2,'4h':4,'>4h':5};
 
-let db, storage, entries=[], currentPrio='', currentDauer='', currentModalId=null, lfdNr=1;
+let db, entries=[], currentPrio='', currentDauer='', currentModalId=null, lfdNr=1;
 let mobileTab='list';
 let pendingFiles=[]; // {file, previewUrl, name, size}
 
@@ -667,7 +669,6 @@ document.getElementById('f-time').value=now.toTimeString().slice(0,5);
 // Firebase
 const app=initializeApp(firebaseConfig);
 db=getFirestore(app);
-storage=getStorage(app);
 setSyncState('connecting');
 const q=query(collection(db,'stoerungen'),orderBy('createdAt','desc'));
 onSnapshot(q,snap=>{
@@ -801,16 +802,14 @@ function addFiles(files){
 async function uploadFiles(stoerungId, files){
   const urls=[];
   for(const pf of files){
-    const path=`stoerungen/${stoerungId}/${Date.now()}_${pf.name}`;
-    const ref=storageRef(storage,path);
-    await new Promise((res,rej)=>{
-      const task=uploadBytesResumable(ref,pf.file);
-      task.on('state_changed',null,rej,async()=>{
-        const url=await getDownloadURL(task.snapshot.ref);
-        urls.push({name:pf.name,size:pf.size,url,path});
-        res();
-      });
-    });
+    const fd=new FormData();
+    fd.append('file', pf.file);
+    fd.append('upload_preset', CLOUDINARY_PRESET);
+    fd.append('folder', `stoerungsbuch/${stoerungId}`);
+    const res=await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`,{method:'POST',body:fd});
+    if(!res.ok) throw new Error('Upload fehlgeschlagen: '+pf.name);
+    const data=await res.json();
+    urls.push({name:pf.name, size:pf.size, url:data.secure_url, publicId:data.public_id});
   }
   return urls;
 }
@@ -1065,9 +1064,7 @@ window.removeExistingAttach=async(docId,idx)=>{
   if(!confirm('Anhang wirklich löschen?')) return;
   const entry=entries.find(x=>x.id===docId);
   if(!entry||!entry.anhaenge) return;
-  const att=entry.anhaenge[idx];
   try{
-    if(att.path) await deleteObject(storageRef(storage,att.path));
     const newList=[...entry.anhaenge];
     newList.splice(idx,1);
     await updateDoc(doc(db,'stoerungen',docId),{anhaenge:newList});
