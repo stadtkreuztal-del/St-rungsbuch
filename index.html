@@ -478,6 +478,7 @@ textarea{resize:vertical;min-height:70px;}
                 <option>Verstopfung</option><option>Maschinenschaden</option>
                 <option>EDV / Steuerung</option><option>Geruchsbelästigung</option>
                 <option>Rattensichtung</option>
+                <option>Geruch</option><option>Fremdkörper</option><option>Einleitungsverstoß</option>
                 <option>Sonstiges</option>
               </select>
             </label>
@@ -506,7 +507,7 @@ textarea{resize:vertical;min-height:70px;}
           <div class="form-grid">
             <label>
               <span class="label-text">Gruppe</span>
-              <select id="f-melder-gruppe" onchange="updateMelderPersonen('f-melder-gruppe','f-melder-person','f-extern-wrap')">
+              <select id="f-melder-gruppe" onchange="updateMelderPersonen('f-melder-gruppe','f-melder-person','f-extern-wrap','f-extern-tel-wrap')">
                 <option value="">– Bitte wählen –</option>
                 <option>Elektriker</option><option>Kanal</option>
                 <option>FAT</option><option>Verwaltung</option><option>Extern</option>
@@ -520,6 +521,10 @@ textarea{resize:vertical;min-height:70px;}
               <span class="label-text">Name (Extern)</span>
               <input type="text" id="f-melder-extern" placeholder="Name / Firma">
             </label>
+            <label class="full" id="f-extern-tel-wrap" style="display:none">
+              <span class="label-text">Telefonnummer (Extern)</span>
+              <input type="text" id="f-melder-extern-tel" placeholder="z. B. 0271 123456">
+            </label>
           </div>
         </div>
 
@@ -529,7 +534,7 @@ textarea{resize:vertical;min-height:70px;}
           <div class="form-grid">
             <label>
               <span class="label-text">Bearbeitet durch (Gruppe)</span>
-              <select id="f-beh-gruppe" onchange="updateMelderPersonen('f-beh-gruppe','f-beh-person','f-beh-extern-wrap')">
+              <select id="f-beh-gruppe" onchange="updateMelderPersonen('f-beh-gruppe','f-beh-person','f-beh-extern-wrap','f-beh-extern-tel-wrap')">
                 <option value="">– Bitte wählen –</option>
                 <option>Elektriker</option><option>Kanal</option>
                 <option>FAT</option><option>Verwaltung</option><option>Extern</option>
@@ -543,13 +548,22 @@ textarea{resize:vertical;min-height:70px;}
               <span class="label-text">Name (Extern)</span>
               <input type="text" id="f-beh-extern" placeholder="Name / Firma">
             </label>
+            <label class="full" id="f-beh-extern-tel-wrap" style="display:none">
+              <span class="label-text">Telefonnummer (Extern)</span>
+              <input type="text" id="f-beh-extern-tel" placeholder="z. B. 0271 123456">
+            </label>
             <div class="full">
               <div class="label-text" style="margin-bottom:7px;">Dauer der Behebung</div>
               <div class="dauer-group" id="dauerGroup">
                 <label class="dauer-chip" onclick="selectDauer(this,'1h')"><input type="checkbox">1 h</label>
                 <label class="dauer-chip" onclick="selectDauer(this,'2h')"><input type="checkbox">2 h</label>
+                <label class="dauer-chip" onclick="selectDauer(this,'3h')"><input type="checkbox">3 h</label>
                 <label class="dauer-chip" onclick="selectDauer(this,'4h')"><input type="checkbox">4 h</label>
-                <label class="dauer-chip" onclick="selectDauer(this,'>4h')"><input type="checkbox">&gt; 4 h</label>
+                <label class="dauer-chip" onclick="selectDauer(this,'5h')"><input type="checkbox">5 h</label>
+                <label class="dauer-chip" onclick="selectDauer(this,'6h')"><input type="checkbox">6 h</label>
+                <label class="dauer-chip" onclick="selectDauer(this,'7h')"><input type="checkbox">7 h</label>
+                <label class="dauer-chip" onclick="selectDauer(this,'8h')"><input type="checkbox">8 h</label>
+                <label class="dauer-chip" onclick="selectDauer(this,'>8h')"><input type="checkbox">&gt; 8 h</label>
               </div>
             </div>
             <label>
@@ -641,19 +655,20 @@ const MELDER = {
   Elektriker:['Büttner','Herb','Schlabach','Schürholz','Rotfuß','R. Klein'],
   Kanal:['Hütten','Memic','Bertelmann','Wurmbach','Leyener','Nitschke','Wacker'],
   FAT:['Rexroth','Binner','Böttcher','Heimann','Schneider','F. Klein'],
-  Verwaltung:['Söhngen','Wendt','Flender','Bald','Irle','Born','Büns-Beerwerth'],
+  Verwaltung:['Söhngen','Wendt','Flender','Bald','Irle','Born','Büns-Beerwerth','Ordnungsamt'],
   Extern:[]
 };
 const ANLAGENTEIL = {
   Kreuztal:['Zulauf','Sandfang','Vorklärung','Belebung','Filtration','Nachklärung','Faulung','Presse'],
   Buschhütten:['Zulauf','Sandfang','Belebung','Nachklärung'],
-  Kanal:['RÜB','RÜ','Ratten','Verstopfung','Hausanschluss','Maschinen/Fahrzeuge']
+  Kanal:['RÜB','RÜ','Ratten','Verstopfung','Hausanschluss','Maschinen/Fahrzeuge','Haltung','Schacht','Auslauf','Bach','Regeneinlauf','Grundstück']
 };
 const STOERUNGSARTEN = ['Pumpenausfall','Elektrische Störung','Rohrbruch / Leckage','Überstauereignis',
-  'Messwertabweichung','Alarmanlage','Verstopfung','Maschinenschaden','EDV / Steuerung','Geruchsbelästigung','Rattensichtung','Sonstiges'];
+  'Messwertabweichung','Alarmanlage','Verstopfung','Maschinenschaden','EDV / Steuerung','Geruchsbelästigung','Rattensichtung',
+  'Geruch','Fremdkörper','Einleitungsverstoß','Sonstiges'];
 const PRIOMAP={niedrig:'low',mittel:'mid',hoch:'high'};
 const STATMAP={Offen:'offen','In Arbeit':'progress',Behoben:'behoben'};
-const DAUERH={'1h':1,'2h':2,'4h':4,'>4h':5};
+const DAUERH={'1h':1,'2h':2,'3h':3,'4h':4,'5h':5,'6h':6,'7h':7,'8h':8,'>8h':9};
 
 let db, entries=[], currentPrio='', currentDauer='', currentModalId=null, lfdNr=1;
 let mobileTab='list';
@@ -727,13 +742,15 @@ window.updateKanalAdresse=()=>{
   const wrap=document.getElementById('f-kanal-adresse-wrap');
   if(wrap) wrap.style.display=(anlage==='Kanal'&&teil)?'flex':'none';
 };
-window.updateMelderPersonen=(gruppeId,personId,extWrapId)=>{
+window.updateMelderPersonen=(gruppeId,personId,extWrapId,extTelWrapId)=>{
   const g=document.getElementById(gruppeId).value;
   const s=document.getElementById(personId);
   const ext=document.getElementById(extWrapId);
+  const extTel=extTelWrapId?document.getElementById(extTelWrapId):null;
   s.innerHTML='<option value="">– Bitte wählen –</option>';
   (MELDER[g]||[]).forEach(p=>s.insertAdjacentHTML('beforeend',`<option>${p}</option>`));
   if(ext) ext.style.display=g==='Extern'?'flex':'none';
+  if(extTel) extTel.style.display=g==='Extern'?'flex':'none';
 };
 window.setPrio=(btn,prio,cls)=>{
   document.querySelectorAll('.prio-btn').forEach(b=>b.className='prio-btn');
@@ -824,8 +841,10 @@ window.addEntry=async()=>{
   if(!titel||!anlage||!art||!date){showToast('⚠ Pflichtfelder ausfüllen','err');return;}
   const melderGruppe=document.getElementById('f-melder-gruppe').value;
   const melderPerson=melderGruppe==='Extern'?document.getElementById('f-melder-extern').value:document.getElementById('f-melder-person').value;
+  const melderTel=melderGruppe==='Extern'?document.getElementById('f-melder-extern-tel').value.trim():'';
   const behGruppe=document.getElementById('f-beh-gruppe').value;
   const behPerson=behGruppe==='Extern'?document.getElementById('f-beh-extern').value:document.getElementById('f-beh-person').value;
+  const behTel=behGruppe==='Extern'?document.getElementById('f-beh-extern-tel').value.trim():'';
   const btn=document.getElementById('saveBtn');
   btn.disabled=true;btn.textContent='⏳ Speichern…';
   try{
@@ -836,7 +855,7 @@ window.addEntry=async()=>{
       art,prio:currentPrio||'niedrig',
       datum:date,zeit:time,
       desc:document.getElementById('f-desc').value.trim(),
-      melderGruppe,melderPerson,behGruppe,behPerson,
+      melderGruppe,melderPerson,melderTel,behGruppe,behPerson,behTel,
       dauer:currentDauer,
       massnahmen:document.getElementById('f-massnahmen').value.trim(),
       status:document.getElementById('f-status').value,
@@ -856,7 +875,7 @@ window.addEntry=async()=>{
 };
 
 window.resetForm=()=>{
-  ['f-titel','f-desc','f-massnahmen','f-melder-extern','f-beh-extern','f-kanal-adresse'].forEach(id=>{
+  ['f-titel','f-desc','f-massnahmen','f-melder-extern','f-beh-extern','f-melder-extern-tel','f-beh-extern-tel','f-kanal-adresse'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
   ['f-anlage','f-anlagenteil','f-art','f-melder-gruppe','f-melder-person','f-beh-gruppe','f-beh-person'].forEach(id=>{
@@ -868,6 +887,8 @@ window.resetForm=()=>{
   document.getElementById('f-time').value=n.toTimeString().slice(0,5);
   document.getElementById('f-extern-wrap').style.display='none';
   document.getElementById('f-beh-extern-wrap').style.display='none';
+  document.getElementById('f-extern-tel-wrap').style.display='none';
+  document.getElementById('f-beh-extern-tel-wrap').style.display='none';
   const kaw=document.getElementById('f-kanal-adresse-wrap');if(kaw)kaw.style.display='none';
   document.querySelectorAll('.prio-btn').forEach(b=>b.className='prio-btn');
   document.querySelectorAll('#dauerGroup .dauer-chip').forEach(c=>c.classList.remove('selected'));
@@ -910,7 +931,7 @@ window.openEditModal=async(id)=>{
     `<option value="${g}"${g===sel?' selected':''}>${g||'– Bitte wählen –'}</option>`).join('');
   const anlageOpts=sel=>[{v:'',l:'– Bitte wählen –'},{v:'Kreuztal',l:'Kläranlage Kreuztal'},{v:'Buschhütten',l:'Kläranlage Buschhütten'},{v:'Kanal',l:'Kanal'}]
     .map(o=>`<option value="${o.v}"${o.v===sel?' selected':''}>${o.l}</option>`).join('');
-  const dauerOpts=['1h','2h','4h','>4h'];
+  const dauerOpts=['1h','2h','3h','4h','5h','6h','7h','8h','>8h'];
 
   document.getElementById('modal-body').innerHTML=`
   <div class="edit-section">
@@ -959,7 +980,7 @@ window.openEditModal=async(id)=>{
     <div class="edit-section-title">04 · Gemeldet durch</div>
     <div class="edit-grid">
       <label><span class="label-text">Gruppe</span>
-        <select id="e-melder-gruppe" onchange="editUpdatePersonen('e-melder-gruppe','e-melder-person','e-melder-ext-wrap')">${melderGruppenOpts(e.melderGruppe)}</select>
+        <select id="e-melder-gruppe" onchange="editUpdatePersonen('e-melder-gruppe','e-melder-person','e-melder-ext-wrap','e-melder-ext-tel-wrap')">${melderGruppenOpts(e.melderGruppe)}</select>
       </label>
       <label><span class="label-text">Person</span>
         <select id="e-melder-person"><option value="">–</option>${personOpts(e.melderGruppe,e.melderPerson)}</select>
@@ -968,13 +989,17 @@ window.openEditModal=async(id)=>{
         <span class="label-text">Name (Extern)</span>
         <input type="text" id="e-melder-extern" value="${e.melderPerson||''}">
       </label>
+      <label class="full" id="e-melder-ext-tel-wrap" style="display:${e.melderGruppe==='Extern'?'flex':'none'}">
+        <span class="label-text">Telefonnummer (Extern)</span>
+        <input type="text" id="e-melder-extern-tel" value="${e.melderTel||''}">
+      </label>
     </div>
   </div>
   <div class="edit-section">
     <div class="edit-section-title">05 · Schadensbehebung</div>
     <div class="edit-grid">
       <label><span class="label-text">Bearbeitet (Gruppe)</span>
-        <select id="e-beh-gruppe" onchange="editUpdatePersonen('e-beh-gruppe','e-beh-person','e-beh-ext-wrap')">${melderGruppenOpts(e.behGruppe)}</select>
+        <select id="e-beh-gruppe" onchange="editUpdatePersonen('e-beh-gruppe','e-beh-person','e-beh-ext-wrap','e-beh-ext-tel-wrap')">${melderGruppenOpts(e.behGruppe)}</select>
       </label>
       <label><span class="label-text">Person</span>
         <select id="e-beh-person"><option value="">–</option>${personOpts(e.behGruppe,e.behPerson)}</select>
@@ -982,6 +1007,10 @@ window.openEditModal=async(id)=>{
       <label class="full" id="e-beh-ext-wrap" style="display:${e.behGruppe==='Extern'?'flex':'none'}">
         <span class="label-text">Name (Extern)</span>
         <input type="text" id="e-beh-extern" value="${e.behPerson||''}">
+      </label>
+      <label class="full" id="e-beh-ext-tel-wrap" style="display:${e.behGruppe==='Extern'?'flex':'none'}">
+        <span class="label-text">Telefonnummer (Extern)</span>
+        <input type="text" id="e-beh-extern-tel" value="${e.behTel||''}">
       </label>
       <div class="full">
         <div class="label-text" style="margin-bottom:6px;">Dauer der Behebung</div>
@@ -1086,13 +1115,15 @@ window.editUpdateKanalAdresse=()=>{
   const wrap=document.getElementById('e-kanal-adresse-wrap');
   if(wrap) wrap.style.display=(anlage==='Kanal'&&teil)?'flex':'none';
 };
-window.editUpdatePersonen=(gruppeId,personId,extId)=>{
+window.editUpdatePersonen=(gruppeId,personId,extId,extTelId)=>{
   const g=document.getElementById(gruppeId).value;
   const s=document.getElementById(personId);
   const ext=document.getElementById(extId);
+  const extTel=extTelId?document.getElementById(extTelId):null;
   s.innerHTML='<option value="">–</option>';
   (MELDER[g]||[]).forEach(p=>s.insertAdjacentHTML('beforeend',`<option>${p}</option>`));
   if(ext) ext.style.display=g==='Extern'?'flex':'none';
+  if(extTel) extTel.style.display=g==='Extern'?'flex':'none';
 };
 window.setEditPrio=(btn,prio)=>{
   document.querySelectorAll('#modal-body .prio-btn').forEach(b=>b.className='prio-btn');
@@ -1107,8 +1138,10 @@ window.selectEditDauer=(chip,val)=>{
 window.saveEdit=async(id)=>{
   const melderGruppe=document.getElementById('e-melder-gruppe').value;
   const melderPerson=melderGruppe==='Extern'?document.getElementById('e-melder-extern').value:document.getElementById('e-melder-person').value;
+  const melderTel=melderGruppe==='Extern'?document.getElementById('e-melder-extern-tel').value.trim():'';
   const behGruppe=document.getElementById('e-beh-gruppe').value;
   const behPerson=behGruppe==='Extern'?document.getElementById('e-beh-extern').value:document.getElementById('e-beh-person').value;
+  const behTel=behGruppe==='Extern'?document.getElementById('e-beh-extern-tel').value.trim():'';
   const saveBtn=document.querySelector('#modal-footer .btn-primary');
   if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='⏳ Speichern…';}
   try{
@@ -1122,7 +1155,7 @@ window.saveEdit=async(id)=>{
       art:document.getElementById('e-art').value,
       prio:window._editPrio||'niedrig',
       desc:document.getElementById('e-desc').value.trim(),
-      melderGruppe,melderPerson,behGruppe,behPerson,
+      melderGruppe,melderPerson,melderTel,behGruppe,behPerson,behTel,
       dauer:window._editDauer||'',
       status:document.getElementById('e-status').value,
       massnahmen:document.getElementById('e-massnahmen').value.trim()
@@ -1146,8 +1179,8 @@ window.openModal=(id)=>{
   currentModalId=id;
   const nr=`STR-${String(e.nr||'?').padStart(4,'0')}`;
   document.getElementById('modal-title').textContent=`${nr} · ${e.titel}`;
-  const melder=e.melderPerson?`${e.melderGruppe} · ${e.melderPerson}`:e.melderGruppe||'–';
-  const beh=e.behPerson?`${e.behGruppe} · ${e.behPerson}`:e.behGruppe||'–';
+  const melder=e.melderPerson?`${e.melderGruppe} · ${e.melderPerson}${e.melderTel?' · ☎ '+e.melderTel:''}`:e.melderGruppe||'–';
+  const beh=e.behPerson?`${e.behGruppe} · ${e.behPerson}${e.behTel?' · ☎ '+e.behTel:''}`:e.behGruppe||'–';
   const prios={niedrig:'🟢 Niedrig',mittel:'🟠 Mittel',hoch:'🔴 Hoch'};
   document.getElementById('modal-body').innerHTML=`
     <div class="detail-grid">
@@ -1279,8 +1312,8 @@ window.printSingleEntry=(id)=>{
   const e=entries.find(x=>x.id===id);if(!e)return;
   const nr=`STR-${String(e.nr||'?').padStart(4,'0')}`;
   const prios={niedrig:'🟢 Niedrig',mittel:'🟠 Mittel',hoch:'🔴 Hoch'};
-  const melder=e.melderPerson?`${e.melderGruppe} · ${e.melderPerson}`:e.melderGruppe||'–';
-  const beh=e.behPerson?`${e.behGruppe} · ${e.behPerson}`:e.behGruppe||'–';
+  const melder=e.melderPerson?`${e.melderGruppe} · ${e.melderPerson}${e.melderTel?' · Tel. '+e.melderTel:''}`:e.melderGruppe||'–';
+  const beh=e.behPerson?`${e.behGruppe} · ${e.behPerson}${e.behTel?' · Tel. '+e.behTel:''}`:e.behGruppe||'–';
   const win=window.open('','_blank','width=800,height=700');
   win.document.write(`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
   <title>Störungsmeldung ${nr}</title>
@@ -1339,7 +1372,7 @@ window.printEntries=()=>{
 // ── EXCEL EXPORT ──
 window.exportExcel=()=>{
   if(!entries.length){showToast('Keine Daten','err');return;}
-  const artCount={},anlageCount={},bearbeiterCount={},dauerCount={'1h':0,'2h':0,'4h':0,'>4h':0};
+  const artCount={},anlageCount={},bearbeiterCount={},dauerCount={'1h':0,'2h':0,'3h':0,'4h':0,'5h':0,'6h':0,'7h':0,'8h':0,'>8h':0};
   let totalH=0,dauN=0;
   entries.forEach(e=>{
     if(e.art) artCount[e.art]=(artCount[e.art]||0)+1;
@@ -1354,13 +1387,13 @@ window.exportExcel=()=>{
   const avg=dauN>0?(totalH/dauN).toFixed(1):'–';
 
   const headers=['Nr.','Datum','Uhrzeit','Anlage','Bereich','Störungsart','Priorität','Beschreibung',
-    'Gemeldet (Gruppe)','Gemeldet (Person)','Bearbeitet (Gruppe)','Bearbeitet (Person)',
+    'Gemeldet (Gruppe)','Gemeldet (Person)','Gemeldet (Telefon)','Bearbeitet (Gruppe)','Bearbeitet (Person)','Bearbeitet (Telefon)',
     'Dauer','Maßnahmen','Status'];
   const rows=entries.map(e=>[
     `STR-${String(e.nr||'?').padStart(4,'0')}`,
     e.datum||'',e.zeit||'',e.anlage||'',e.anlagenteil||'',e.art||'',e.prio||'',
-    e.desc||'',e.melderGruppe||'',e.melderPerson||'',
-    e.behGruppe||'',e.behPerson||'',e.dauer||'',e.massnahmen||'',e.status||''
+    e.desc||'',e.melderGruppe||'',e.melderPerson||'',e.melderTel||'',
+    e.behGruppe||'',e.behPerson||'',e.behTel||'',e.dauer||'',e.massnahmen||'',e.status||''
   ]);
 
   const auswertung=[
