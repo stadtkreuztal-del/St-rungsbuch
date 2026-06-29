@@ -15,6 +15,7 @@
   --danger:#c94040; --danger-light:rgba(201,64,64,0.15);
   --ok:#3d8b6e; --ok-light:rgba(61,139,110,0.15);
   --blue:#4a7fc1; --blue-light:rgba(74,127,193,0.15);
+  --rufb:#9b59b6; --rufb-light:rgba(155,89,182,0.15);
   --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif;
   --radius:8px; --shadow:0 4px 20px rgba(0,0,0,0.4);
 }
@@ -91,8 +92,12 @@ header p{font-size:10px;color:var(--text-muted);font-family:var(--mono);}
 @media(max-width:900px){.main-panel{display:none;}.main-panel.mobile-open{display:flex;flex-direction:column;gap:16px;}}
 
 /* STATS */
-.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.stats-bar{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+@media(max-width:900px){.stats-bar{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:700px){.stats-bar{grid-template-columns:repeat(2,1fr);}}
+.stat-card.rufbereitschaft::before{background:var(--rufb);}
+.stat-card.rufbereitschaft:hover{background:var(--rufb-light);border-color:var(--rufb);transition:all .15s;}
+.stat-card.rufbereitschaft.active-filter{background:var(--rufb-light);border-color:var(--rufb);}
 .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   padding:12px 14px;position:relative;overflow:hidden;}
 .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent);}
@@ -405,6 +410,11 @@ textarea{resize:vertical;min-height:70px;}
         <div class="stat-value" id="stBehoben" style="color:var(--ok)">–</div>
         <div class="stat-sub" id="stAvg">Ø Dauer: –</div>
       </div>
+      <div class="stat-card rufbereitschaft" style="cursor:pointer" onclick="filterRufbereitschaft()" title="Nur Rufbereitschaft anzeigen">
+        <div class="stat-label">Rufbereitschaft</div>
+        <div class="stat-value" id="stRuf" style="color:var(--rufb)">–</div>
+        <div class="stat-sub" id="stRufSub">Außerdienstl. Einsätze</div>
+      </div>
     </div>
 
     <!-- Aktionsleiste -->
@@ -574,6 +584,10 @@ textarea{resize:vertical;min-height:70px;}
                 <option value="Behoben">Behoben</option>
               </select>
             </label>
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--rufb-light);border:1px solid rgba(155,89,182,.35);border-radius:6px;">
+              <input type="checkbox" id="f-rufbereitschaft" style="width:18px;height:18px;accent-color:var(--rufb);cursor:pointer;flex-shrink:0;">
+              <label for="f-rufbereitschaft" style="cursor:pointer;font-size:13px;font-weight:500;color:var(--rufb);user-select:none;">🔔 Rufbereitschaft</label>
+            </div>
             <label class="full">
               <span class="label-text">Durchgeführte Maßnahmen / Reparaturen</span>
               <textarea id="f-massnahmen" placeholder="Was wurde gemacht, repariert oder ersetzt?"></textarea>
@@ -859,6 +873,7 @@ window.addEntry=async()=>{
       dauer:currentDauer,
       massnahmen:document.getElementById('f-massnahmen').value.trim(),
       status:document.getElementById('f-status').value,
+      rufbereitschaft:document.getElementById('f-rufbereitschaft').checked,
       createdAt:serverTimestamp(),
       anhaenge:[]
     });
@@ -882,6 +897,7 @@ window.resetForm=()=>{
     const el=document.getElementById(id);if(el)el.selectedIndex=0;
   });
   document.getElementById('f-status').value='Offen';
+  const rfEl=document.getElementById('f-rufbereitschaft');if(rfEl)rfEl.checked=false;
   const n=new Date();
   document.getElementById('f-date').value=n.toISOString().slice(0,10);
   document.getElementById('f-time').value=n.toTimeString().slice(0,5);
@@ -1021,6 +1037,10 @@ window.openEditModal=async(id)=>{
       <label><span class="label-text">Status</span>
         <select id="e-status">${statusOpts(e.status)}</select>
       </label>
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--rufb-light);border:1px solid rgba(155,89,182,.35);border-radius:6px;">
+        <input type="checkbox" id="e-rufbereitschaft" ${e.rufbereitschaft?'checked':''} style="width:18px;height:18px;accent-color:var(--rufb);cursor:pointer;flex-shrink:0;">
+        <label for="e-rufbereitschaft" style="cursor:pointer;font-size:13px;font-weight:500;color:var(--rufb);user-select:none;">🔔 Rufbereitschaft</label>
+      </div>
       <label class="full"><span class="label-text">Maßnahmen</span>
         <textarea id="e-massnahmen">${e.massnahmen||''}</textarea>
       </label>
@@ -1158,6 +1178,7 @@ window.saveEdit=async(id)=>{
       melderGruppe,melderPerson,melderTel,behGruppe,behPerson,behTel,
       dauer:window._editDauer||'',
       status:document.getElementById('e-status').value,
+      rufbereitschaft:document.getElementById('e-rufbereitschaft')?.checked||false,
       massnahmen:document.getElementById('e-massnahmen').value.trim()
     });
     if(editPendingFiles.length){
@@ -1223,25 +1244,36 @@ window.openModal=(id)=>{
 window.closeModal=()=>{document.getElementById('modalOverlay').classList.remove('open');currentModalId=null;};
 window.closeModalBg=e=>{if(e.target===document.getElementById('modalOverlay'))closeModal();};
 
+// ── RUFBEREITSCHAFT FILTER ──
+let rufFilter=false;
+window.filterRufbereitschaft=()=>{
+  rufFilter=!rufFilter;
+  const card=document.querySelector('.stat-card.rufbereitschaft');
+  if(card) card.classList.toggle('active-filter',rufFilter);
+  renderCards();renderSidebar();
+  showToast(rufFilter?'🔔 Nur Rufbereitschaft':'Alle Meldungen','ok');
+};
+
 // ── RENDER CARDS ──
 window.renderCards=()=>{
   const c=document.getElementById('entryCards');
-  if(!entries.length){
-    c.innerHTML=`<div class="card"><div style="padding:36px;text-align:center;color:var(--text-dim);font-size:13px;">📭 Noch keine Störungen erfasst.</div></div>`;
+  let list=rufFilter?entries.filter(e=>e.rufbereitschaft):entries;
+  if(!list.length){
+    c.innerHTML=`<div class="card"><div style="padding:36px;text-align:center;color:var(--text-dim);font-size:13px;">${rufFilter?'🔔 Keine Rufbereitschafts-Meldungen.':'📭 Noch keine Störungen erfasst.'}</div></div>`;
     return;
   }
-  c.innerHTML=entries.map(e=>{
+  c.innerHTML=list.map(e=>{
     const nr=`STR-${String(e.nr||'?').padStart(4,'0')}`;
     const melder=e.melderPerson?`${e.melderGruppe}·${e.melderPerson}`:e.melderGruppe||'–';
     const dt=e.datum?`${e.datum}${e.zeit?' '+e.zeit:''}`:fmtDt(e.dt);
-    return `<div class="card" style="margin-bottom:10px;cursor:pointer" onclick="openModal('${e.id}')">
+    return `<div class="card" style="margin-bottom:10px;cursor:pointer${e.rufbereitschaft?';border-left:3px solid var(--rufb)':''}" onclick="openModal('${e.id}')">
       <div style="padding:11px 14px;display:grid;grid-template-columns:auto 1fr auto;gap:11px;align-items:start;">
         <div style="display:flex;flex-direction:column;align-items:center;gap:5px;padding-top:2px;">
           <div class="si-dot ${PRIOMAP[e.prio]||'low'}" style="width:10px;height:10px;"></div>
           <span style="font-size:10px;font-family:var(--mono);color:var(--text-dim)">${nr}</span>
         </div>
         <div style="min-width:0;">
-          <div style="font-weight:600;font-size:14px;margin-bottom:3px;">${e.titel}</div>
+          <div style="font-weight:600;font-size:14px;margin-bottom:3px;">${e.rufbereitschaft?'<span style="color:var(--rufb);font-size:12px;margin-right:6px;">🔔 Rufbereitschaft</span>':''}${e.titel}</div>
           <div style="font-size:11px;color:var(--text-muted);font-family:var(--mono);display:flex;gap:10px;flex-wrap:wrap;">
             <span>📍 ${e.anlage||'–'}${e.anlagenteil?' · '+e.anlagenteil:''}</span>
             <span>⚙ ${e.art||'–'}</span>
@@ -1273,7 +1305,7 @@ window.renderSidebar=()=>{
   const fP=document.getElementById('sb-prio').value;
   const filtered=entries.filter(e=>{
     const ms=!search||[e.titel,e.anlage,e.art,e.melderPerson,e.desc].some(v=>v&&v.toLowerCase().includes(search));
-    return ms&&(!fS||e.status===fS)&&(!fA||e.anlage===fA)&&(!fP||e.prio===fP);
+    return ms&&(!fS||e.status===fS)&&(!fA||e.anlage===fA)&&(!fP||e.prio===fP)&&(!rufFilter||e.rufbereitschaft);
   });
   const list=document.getElementById('sidebarList');
   if(!filtered.length){list.innerHTML=`<div class="sidebar-empty">Keine Einträge gefunden.</div>`;return;}
@@ -1301,6 +1333,10 @@ function updateStats(){
   document.getElementById('stOffen').textContent=entries.filter(e=>e.status==='Offen').length;
   document.getElementById('stProgress').textContent=entries.filter(e=>e.status==='In Arbeit').length;
   document.getElementById('stBehoben').textContent=entries.filter(e=>e.status==='Behoben').length;
+  // Rufbereitschaft
+  const rufCount=entries.filter(e=>e.rufbereitschaft).length;
+  document.getElementById('stRuf').textContent=rufCount;
+  document.getElementById('stRufSub').textContent=`Außerdienstl. Einsätze`;
   // Avg duration
   const withDauer=entries.filter(e=>e.dauer&&DAUERH[e.dauer]);
   const avg=withDauer.length>0?(withDauer.reduce((s,e)=>s+DAUERH[e.dauer],0)/withDauer.length).toFixed(1):'–';
