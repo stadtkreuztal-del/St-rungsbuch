@@ -145,6 +145,10 @@ textarea{resize:vertical;min-height:70px;}
 .prio-btn.active-low{background:var(--ok-light);border-color:var(--ok);color:var(--ok);font-weight:600;}
 .prio-btn.active-mid{background:var(--warn-light);border-color:var(--warn);color:var(--warn);font-weight:600;}
 .prio-btn.active-high{background:var(--danger-light);border-color:var(--danger);color:var(--danger);font-weight:600;}
+.rufb-btn{padding:7px 13px;border-radius:20px;border:1px solid var(--border);background:transparent;
+  font-size:12px;font-family:var(--mono);cursor:pointer;transition:all .15s;color:var(--text-muted);}
+.rufb-btn:hover{border-color:var(--rufb);color:var(--rufb);}
+.rufb-btn.active-rufb{background:var(--rufb-light);border-color:var(--rufb);color:var(--rufb);font-weight:600;}
 
 /* Dauer checkboxes */
 .dauer-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px;}
@@ -517,7 +521,7 @@ textarea{resize:vertical;min-height:70px;}
           <div class="form-grid">
             <label>
               <span class="label-text">Gruppe</span>
-              <select id="f-melder-gruppe" onchange="updateMelderPersonen('f-melder-gruppe','f-melder-person','f-extern-wrap','f-extern-tel-wrap')">
+              <select id="f-melder-gruppe" onchange="updateMelderPersonen('f-melder-gruppe','f-melder-person','f-extern-wrap')">
                 <option value="">– Bitte wählen –</option>
                 <option>Elektriker</option><option>Kanal</option>
                 <option>FAT</option><option>Verwaltung</option><option>Extern</option>
@@ -531,10 +535,6 @@ textarea{resize:vertical;min-height:70px;}
               <span class="label-text">Name (Extern)</span>
               <input type="text" id="f-melder-extern" placeholder="Name / Firma">
             </label>
-            <label class="full" id="f-extern-tel-wrap" style="display:none">
-              <span class="label-text">Telefonnummer (Extern)</span>
-              <input type="text" id="f-melder-extern-tel" placeholder="z. B. 0271 123456">
-            </label>
           </div>
         </div>
 
@@ -544,7 +544,7 @@ textarea{resize:vertical;min-height:70px;}
           <div class="form-grid">
             <label>
               <span class="label-text">Bearbeitet durch (Gruppe)</span>
-              <select id="f-beh-gruppe" onchange="updateMelderPersonen('f-beh-gruppe','f-beh-person','f-beh-extern-wrap','f-beh-extern-tel-wrap')">
+              <select id="f-beh-gruppe" onchange="updateMelderPersonen('f-beh-gruppe','f-beh-person','f-beh-extern-wrap')">
                 <option value="">– Bitte wählen –</option>
                 <option>Elektriker</option><option>Kanal</option>
                 <option>FAT</option><option>Verwaltung</option><option>Extern</option>
@@ -557,10 +557,6 @@ textarea{resize:vertical;min-height:70px;}
             <label class="full" id="f-beh-extern-wrap" style="display:none">
               <span class="label-text">Name (Extern)</span>
               <input type="text" id="f-beh-extern" placeholder="Name / Firma">
-            </label>
-            <label class="full" id="f-beh-extern-tel-wrap" style="display:none">
-              <span class="label-text">Telefonnummer (Extern)</span>
-              <input type="text" id="f-beh-extern-tel" placeholder="z. B. 0271 123456">
             </label>
             <div class="full">
               <div class="label-text" style="margin-bottom:7px;">Dauer der Behebung</div>
@@ -584,9 +580,19 @@ textarea{resize:vertical;min-height:70px;}
                 <option value="Behoben">Behoben</option>
               </select>
             </label>
-            <div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--rufb-light);border:1px solid rgba(155,89,182,.35);border-radius:6px;">
-              <input type="checkbox" id="f-rufbereitschaft" style="width:18px;height:18px;accent-color:var(--rufb);cursor:pointer;flex-shrink:0;">
-              <label for="f-rufbereitschaft" style="cursor:pointer;font-size:13px;font-weight:500;color:var(--rufb);user-select:none;">🔔 Rufbereitschaft</label>
+            <div class="full">
+              <div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--rufb-light);border:1px solid rgba(155,89,182,.35);border-radius:6px;">
+                <input type="checkbox" id="f-rufbereitschaft" onchange="toggleRufbZeit(this)" style="width:18px;height:18px;accent-color:var(--rufb);cursor:pointer;flex-shrink:0;">
+                <label for="f-rufbereitschaft" style="cursor:pointer;font-size:13px;font-weight:500;color:var(--rufb);user-select:none;">🔔 Rufbereitschaft</label>
+              </div>
+              <div class="full" id="f-rufb-zeit-wrap" style="display:none;margin-top:8px;">
+                <div class="label-text" style="margin-bottom:7px;">Zeitraum Rufbereitschaft</div>
+                <div class="prio-group" id="rufbZeitGroup">
+                  <button type="button" class="rufb-btn" onclick="selectRufbZeit(this,'Dienstende - 21:00 Uhr')">Dienstende – 21:00 Uhr</button>
+                  <button type="button" class="rufb-btn" onclick="selectRufbZeit(this,'21:00 - 06:00 Uhr')">21:00 – 06:00 Uhr</button>
+                  <button type="button" class="rufb-btn" onclick="selectRufbZeit(this,'Wochenende/Feiertag')">Wochenende/Feiertag</button>
+                </div>
+              </div>
             </div>
             <label class="full">
               <span class="label-text">Durchgeführte Maßnahmen / Reparaturen</span>
@@ -684,7 +690,7 @@ const PRIOMAP={niedrig:'low',mittel:'mid',hoch:'high'};
 const STATMAP={Offen:'offen','In Arbeit':'progress',Behoben:'behoben'};
 const DAUERH={'1h':1,'2h':2,'3h':3,'4h':4,'5h':5,'6h':6,'7h':7,'8h':8,'>8h':9};
 
-let db, entries=[], currentPrio='', currentDauer='', currentModalId=null, lfdNr=1;
+let db, entries=[], currentPrio='', currentDauer='', currentRufbZeit='', currentModalId=null, lfdNr=1;
 let mobileTab='list';
 let pendingFiles=[]; // {file, previewUrl, name, size}
 
@@ -756,15 +762,13 @@ window.updateKanalAdresse=()=>{
   const wrap=document.getElementById('f-kanal-adresse-wrap');
   if(wrap) wrap.style.display=(anlage==='Kanal'&&teil)?'flex':'none';
 };
-window.updateMelderPersonen=(gruppeId,personId,extWrapId,extTelWrapId)=>{
+window.updateMelderPersonen=(gruppeId,personId,extWrapId)=>{
   const g=document.getElementById(gruppeId).value;
   const s=document.getElementById(personId);
   const ext=document.getElementById(extWrapId);
-  const extTel=extTelWrapId?document.getElementById(extTelWrapId):null;
   s.innerHTML='<option value="">– Bitte wählen –</option>';
   (MELDER[g]||[]).forEach(p=>s.insertAdjacentHTML('beforeend',`<option>${p}</option>`));
   if(ext) ext.style.display=g==='Extern'?'flex':'none';
-  if(extTel) extTel.style.display=g==='Extern'?'flex':'none';
 };
 window.setPrio=(btn,prio,cls)=>{
   document.querySelectorAll('.prio-btn').forEach(b=>b.className='prio-btn');
@@ -773,6 +777,19 @@ window.setPrio=(btn,prio,cls)=>{
 window.selectDauer=(chip,val)=>{
   document.querySelectorAll('#dauerGroup .dauer-chip').forEach(c=>c.classList.remove('selected'));
   chip.classList.add('selected');currentDauer=val;
+};
+window.toggleRufbZeit=(cb)=>{
+  const wrap=document.getElementById('f-rufb-zeit-wrap');
+  if(wrap) wrap.style.display=cb.checked?'block':'none';
+  if(!cb.checked){
+    currentRufbZeit='';
+    document.querySelectorAll('#rufbZeitGroup .rufb-btn').forEach(b=>b.classList.remove('active-rufb'));
+  }
+};
+window.selectRufbZeit=(btn,val)=>{
+  document.querySelectorAll('#rufbZeitGroup .rufb-btn').forEach(b=>b.classList.remove('active-rufb'));
+  btn.classList.add('active-rufb');
+  currentRufbZeit=val;
 };
 
 // ── FILE UPLOAD HELPERS ──
@@ -855,10 +872,10 @@ window.addEntry=async()=>{
   if(!titel||!anlage||!art||!date){showToast('⚠ Pflichtfelder ausfüllen','err');return;}
   const melderGruppe=document.getElementById('f-melder-gruppe').value;
   const melderPerson=melderGruppe==='Extern'?document.getElementById('f-melder-extern').value:document.getElementById('f-melder-person').value;
-  const melderTel=melderGruppe==='Extern'?document.getElementById('f-melder-extern-tel').value.trim():'';
+  const melderTel='';
   const behGruppe=document.getElementById('f-beh-gruppe').value;
   const behPerson=behGruppe==='Extern'?document.getElementById('f-beh-extern').value:document.getElementById('f-beh-person').value;
-  const behTel=behGruppe==='Extern'?document.getElementById('f-beh-extern-tel').value.trim():'';
+  const behTel='';
   const btn=document.getElementById('saveBtn');
   btn.disabled=true;btn.textContent='⏳ Speichern…';
   try{
@@ -874,6 +891,7 @@ window.addEntry=async()=>{
       massnahmen:document.getElementById('f-massnahmen').value.trim(),
       status:document.getElementById('f-status').value,
       rufbereitschaft:document.getElementById('f-rufbereitschaft').checked,
+      rufbereitschaftZeit:document.getElementById('f-rufbereitschaft').checked?currentRufbZeit:'',
       createdAt:serverTimestamp(),
       anhaenge:[]
     });
@@ -890,7 +908,7 @@ window.addEntry=async()=>{
 };
 
 window.resetForm=()=>{
-  ['f-titel','f-desc','f-massnahmen','f-melder-extern','f-beh-extern','f-melder-extern-tel','f-beh-extern-tel','f-kanal-adresse'].forEach(id=>{
+  ['f-titel','f-desc','f-massnahmen','f-melder-extern','f-beh-extern','f-kanal-adresse'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
   ['f-anlage','f-anlagenteil','f-art','f-melder-gruppe','f-melder-person','f-beh-gruppe','f-beh-person'].forEach(id=>{
@@ -903,12 +921,12 @@ window.resetForm=()=>{
   document.getElementById('f-time').value=n.toTimeString().slice(0,5);
   document.getElementById('f-extern-wrap').style.display='none';
   document.getElementById('f-beh-extern-wrap').style.display='none';
-  document.getElementById('f-extern-tel-wrap').style.display='none';
-  document.getElementById('f-beh-extern-tel-wrap').style.display='none';
+  const rzw=document.getElementById('f-rufb-zeit-wrap');if(rzw)rzw.style.display='none';
+  document.querySelectorAll('#rufbZeitGroup .rufb-btn').forEach(b=>b.classList.remove('active-rufb'));
   const kaw=document.getElementById('f-kanal-adresse-wrap');if(kaw)kaw.style.display='none';
   document.querySelectorAll('.prio-btn').forEach(b=>b.className='prio-btn');
   document.querySelectorAll('#dauerGroup .dauer-chip').forEach(c=>c.classList.remove('selected'));
-  currentPrio='';currentDauer='';
+  currentPrio='';currentDauer='';currentRufbZeit='';
   pendingFiles=[];renderAttachList();
 };
 
