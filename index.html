@@ -491,6 +491,10 @@ textarea{resize:vertical;min-height:70px;}
               <span class="label-text">Bauwerk</span>
               <select id="f-kanal-objekt"><option value="">– Bitte wählen –</option></select>
             </label>
+            <label class="full" id="f-anlagenteil-detail-wrap" style="display:none">
+              <span class="label-text">Detail</span>
+              <select id="f-anlagenteil-detail"><option value="">– Bitte wählen –</option></select>
+            </label>
             <label class="full" id="f-kanal-adresse-wrap" style="display:none">
               <span class="label-text">Adresse / Standort</span>
               <input type="text" id="f-kanal-adresse" placeholder="z. B. Musterstraße 12, Kreuztal">
@@ -660,7 +664,7 @@ textarea{resize:vertical;min-height:70px;}
     <table id="printTable">
       <thead>
         <tr>
-          <th>Nr.</th><th>Datum</th><th>Zeit</th><th>Anlage</th><th>Bereich</th><th>Bauwerk</th>
+          <th>Nr.</th><th>Datum</th><th>Zeit</th><th>Anlage</th><th>Bereich</th><th>Detail</th><th>Bauwerk</th>
           <th>Art</th><th>Beschreibung</th><th>Prio</th>
           <th>Gemeldet</th><th>Bearbeitet</th><th>Dauer</th><th>Maßnahmen</th><th>Status</th>
         </tr>
@@ -713,9 +717,33 @@ const MELDER = {
   Extern:['Bürger','Fremdfirma']
 };
 const ANLAGENTEIL = {
-  Kreuztal:['Zulauf','Sandfang','Vorklärung','Belebung','Filtration','Nachklärung','Faulung','Presse'],
-  Buschhütten:['Zulauf','Sandfang','Belebung','Nachklärung'],
+  Kreuztal:['Zulauf','Sandfang','Zwischenklärung','Belebung Vorstufe','Belebung Hauptstufe','Nachklärung','Fällmittelstation','Filtration','Schlammentwässerung','Faulung','Labor'],
+  Buschhütten:['Zulauf','Sandfang','Belebung','Nachklärung','Rücklaufschlammpumpe','Schlammentwässerung','Fällmittelstation'],
   Kanal:['RÜB','RÜ','Pumpstation','Ratten','Verstopfung','Hausanschluss','Maschinen/Fahrzeuge','Haltung','Schacht','Auslauf','Bach','Regeneinlauf','Grundstück']
+};
+const ANLAGENTEIL_DETAIL = {
+  Kreuztal:{
+    'Zulauf':['Allgemein','Abluft','Gebäude','Grobrechen','Feinrechen','Messeinrichtung','Pumpwerk','Transporteinheit'],
+    'Sandfang':['Allgemein','Abluft','Becken','Gebäude','Gebläse','Messeinrichtung','Pumpe','Räumer','Transporteinheit','Wäscher'],
+    'Zwischenklärung':['Allgemein','Pumpe','Räumer','RLS Pumpwerk'],
+    'Belebung Vorstufe':['Allgemein','Ablauf','Becken','Gebläse','Messeinrichtung'],
+    'Belebung Hauptstufe':['Allgemein','Ablauf','Becken','Gebläse','Messeinrichtung'],
+    'Nachklärung':['Allgemein','Becken','Gebäude','Messeinrichtung','Pumpe','Räumer','RLS Pumpwerk'],
+    'Fällmittelstation':['Allgemein','Gebäude','Messeinrichtung','Pumpe','Fällmitteltank'],
+    'Filtration':['Allgemein','Becken','Filter','Gebäude','Gebläse','Messeinrichtung','Pumpe'],
+    'Schlammentwässerung':['Allgemein','Abluft','Gebäude','Messeinrichtung','ÜSSE 1','ÜSSE 2','Polystation'],
+    'Faulung':['Allgemein','Gebäude','Messeinrichtung','Faulturm 1','Faulturm 2','Transporteinheit'],
+    'Labor':['Allgemein','Überschreitung','Probenehmer']
+  },
+  Buschhütten:{
+    'Zulauf':['Allgemein','Gebäude','Rechen','Messeinrichtung','Pumpwerk','Transporteinheit'],
+    'Sandfang':['Allgemein','Gerinne','Gebläse','Messeinrichtung','Pumpe','Räumer','Transporteinheit','Wäscher'],
+    'Belebung':['Allgemein','Becken','Gebläse','Messeinrichtung'],
+    'Nachklärung':['Allgemein','Becken','Räumer'],
+    'Rücklaufschlammpumpe':['Allgemein','Pumpe','Messeinrichtung'],
+    'Schlammentwässerung':['Allgemein','Gebäude','Messeinrichtung','ÜSSE','Betriebswasserbehälter','Polystation','Schlammsilo'],
+    'Fällmittelstation':['Allgemein','Messeinrichtung','Pumpe','Fällmitteltank']
+  }
 };
 const KANAL_OBJEKTE = {
   'RÜB':['RÜB 1 Alter Bruch','RÜB 3 - Ley','RÜB 4 Ernsdorfstr','RÜB 4.2 Mühlenweg','RÜB 4.3 Aherweiden',
@@ -817,6 +845,18 @@ window.updateKanalAdresse=()=>{
     }else{
       objSel.innerHTML='<option value="">– Bitte wählen –</option>';
       objWrap.style.display='none';
+    }
+  }
+  const detWrap=document.getElementById('f-anlagenteil-detail-wrap');
+  const detSel=document.getElementById('f-anlagenteil-detail');
+  const detList=(ANLAGENTEIL_DETAIL[anlage]||{})[teil];
+  if(detWrap&&detSel){
+    if(detList){
+      detSel.innerHTML='<option value="">– Bitte wählen –</option>'+detList.map(o=>`<option>${o}</option>`).join('');
+      detWrap.style.display='flex';
+    }else{
+      detSel.innerHTML='<option value="">– Bitte wählen –</option>';
+      detWrap.style.display='none';
     }
   }
 };
@@ -940,6 +980,7 @@ window.addEntry=async()=>{
     const docRef=await addDoc(collection(db,'stoerungen'),{
       nr:lfdNr,titel,anlage,
       anlagenteil:document.getElementById('f-anlagenteil').value,
+      anlagenteilDetail:document.getElementById('f-anlagenteil-detail')?.value||'',
       kanalObjekt:document.getElementById('f-kanal-objekt')?.value||'',
       kanalAdresse:document.getElementById('f-kanal-adresse')?.value?.trim()||'',
       art,prio:currentPrio||'niedrig',
@@ -985,6 +1026,8 @@ window.resetForm=()=>{
   const kaw=document.getElementById('f-kanal-adresse-wrap');if(kaw)kaw.style.display='none';
   const kow=document.getElementById('f-kanal-objekt-wrap');if(kow)kow.style.display='none';
   const kos=document.getElementById('f-kanal-objekt');if(kos)kos.innerHTML='<option value="">– Bitte wählen –</option>';
+  const detw=document.getElementById('f-anlagenteil-detail-wrap');if(detw)detw.style.display='none';
+  const dets=document.getElementById('f-anlagenteil-detail');if(dets)dets.innerHTML='<option value="">– Bitte wählen –</option>';
   document.querySelectorAll('.prio-btn').forEach(b=>b.className='prio-btn');
   document.querySelectorAll('#dauerGroup .dauer-chip').forEach(c=>c.classList.remove('selected'));
   currentPrio='';currentDauer='';currentRufbZeit='';
@@ -1020,6 +1063,9 @@ window.openEditModal=async(id)=>{
   const atOpts=(anlage,selected)=>{
     return (ANLAGENTEIL[anlage]||[]).map(t=>`<option${t===selected?' selected':''}>${t}</option>`).join('');
   };
+  const atDetailOpts=(anlage,teil,selected)=>{
+    return ((ANLAGENTEIL_DETAIL[anlage]||{})[teil]||[]).map(t=>`<option${t===selected?' selected':''}>${t}</option>`).join('');
+  };
   const artOpts=selected=>STOERUNGSARTEN.map(a=>`<option${a===selected?' selected':''}>${a}</option>`).join('');
   const statusOpts=selected=>['Offen','In Arbeit','Behoben'].map(s=>`<option${s===selected?' selected':''}>${s}</option>`).join('');
   const melderGruppenOpts=sel=>['','Elektriker','Kanal','FAT','Verwaltung','Extern'].map(g=>
@@ -1049,6 +1095,10 @@ window.openEditModal=async(id)=>{
       <label class="full" id="e-kanal-objekt-wrap" style="display:${(e.anlage==='Kanal'&&KANAL_OBJEKTE[e.anlagenteil])?'flex':'none'}">
         <span class="label-text">Bauwerk</span>
         <select id="e-kanal-objekt"><option value="">– Bitte wählen –</option>${(KANAL_OBJEKTE[e.anlagenteil]||[]).map(o=>`<option${o===e.kanalObjekt?' selected':''}>${o}</option>`).join('')}</select>
+      </label>
+      <label class="full" id="e-anlagenteil-detail-wrap" style="display:${((ANLAGENTEIL_DETAIL[e.anlage]||{})[e.anlagenteil])?'flex':'none'}">
+        <span class="label-text">Detail</span>
+        <select id="e-anlagenteil-detail"><option value="">– Bitte wählen –</option>${atDetailOpts(e.anlage,e.anlagenteil,e.anlagenteilDetail)}</select>
       </label>
       <label class="full" id="e-kanal-adresse-wrap" style="display:${(e.anlage==='Kanal'&&e.anlagenteil)?'flex':'none'}">
         <span class="label-text">Adresse / Standort</span>
@@ -1229,6 +1279,18 @@ window.editUpdateKanalAdresse=()=>{
       objWrap.style.display='none';
     }
   }
+  const detWrap=document.getElementById('e-anlagenteil-detail-wrap');
+  const detSel=document.getElementById('e-anlagenteil-detail');
+  const detList=(ANLAGENTEIL_DETAIL[anlage]||{})[teil];
+  if(detWrap&&detSel){
+    if(detList){
+      detSel.innerHTML='<option value="">– Bitte wählen –</option>'+detList.map(o=>`<option>${o}</option>`).join('');
+      detWrap.style.display='flex';
+    }else{
+      detSel.innerHTML='<option value="">– Bitte wählen –</option>';
+      detWrap.style.display='none';
+    }
+  }
 };
 window.editUpdatePersonen=(gruppeId,personId,extId,extTelId)=>{
   const g=document.getElementById(gruppeId).value;
@@ -1266,6 +1328,7 @@ window.saveEdit=async(id)=>{
       zeit:document.getElementById('e-time').value,
       anlage:document.getElementById('e-anlage').value,
       anlagenteil:document.getElementById('e-anlagenteil').value,
+      anlagenteilDetail:document.getElementById('e-anlagenteil-detail')?.value||'',
       kanalObjekt:document.getElementById('e-kanal-objekt')?.value||'',
       kanalAdresse:document.getElementById('e-kanal-adresse')?.value?.trim()||'',
       art:document.getElementById('e-art').value,
@@ -1305,6 +1368,7 @@ window.openModal=(id)=>{
       <div class="detail-field"><div class="detail-label">Uhrzeit</div><div class="detail-value">${e.zeit||'–'}</div></div>
       <div class="detail-field"><div class="detail-label">Anlage</div><div class="detail-value">${e.anlage||'–'}</div></div>
       <div class="detail-field"><div class="detail-label">Bereich</div><div class="detail-value">${e.anlagenteil||'–'}</div></div>
+      ${e.anlagenteilDetail?`<div class="detail-field"><div class="detail-label">Detail</div><div class="detail-value">${e.anlagenteilDetail}</div></div>`:''}
       ${e.kanalObjekt?`<div class="detail-field detail-full"><div class="detail-label">Bauwerk</div><div class="detail-value">${e.kanalObjekt}</div></div>`:''}
       ${e.kanalAdresse?`<div class="detail-field detail-full"><div class="detail-label">Adresse / Standort</div><div class="detail-value">${e.kanalAdresse}</div></div>`:''}
       <div class="detail-field"><div class="detail-label">Störungsart</div><div class="detail-value">${e.art||'–'}</div></div>
@@ -1385,7 +1449,7 @@ function entryCardHTML(e){
   const nr=`STR-${String(e.nr||'?').padStart(4,'0')}`;
   const melder=e.melderPerson?`${e.melderGruppe}·${e.melderPerson}`:e.melderGruppe||'–';
   const dt=e.zeit||'–';
-  const ortTeile=[e.anlagenteil,e.kanalObjekt].filter(Boolean).join(' · ');
+  const ortTeile=[e.anlagenteil,e.anlagenteilDetail,e.kanalObjekt].filter(Boolean).join(' · ');
   return `<div class="card" style="margin-bottom:8px;cursor:pointer${e.rufbereitschaft?';border-left:3px solid var(--rufb)':''}" onclick="openModal('${e.id}')">
       <div style="padding:11px 14px;display:grid;grid-template-columns:auto 1fr auto;gap:11px;align-items:start;">
         <div style="display:flex;flex-direction:column;align-items:center;gap:5px;padding-top:2px;">
@@ -1635,6 +1699,7 @@ window.printSingleEntry=(id)=>{
     <div class="field"><div class="label">Uhrzeit</div><div class="value">${e.zeit||'–'}</div></div>
     <div class="field"><div class="label">Anlage</div><div class="value">${e.anlage||'–'}</div></div>
     <div class="field"><div class="label">Bereich</div><div class="value">${e.anlagenteil||'–'}</div></div>
+    ${e.anlagenteilDetail?`<div class="field"><div class="label">Detail</div><div class="value">${e.anlagenteilDetail}</div></div>`:''}
     ${e.kanalObjekt?`<div class="field full"><div class="label">Bauwerk</div><div class="value">${e.kanalObjekt}</div></div>`:''}
     ${e.kanalAdresse?`<div class="field full"><div class="label">Adresse / Standort</div><div class="value">${e.kanalAdresse}</div></div>`:''}
     <div class="field"><div class="label">Störungsart</div><div class="value">${e.art||'–'}</div></div>
@@ -1659,7 +1724,7 @@ window.printEntries=()=>{
   tbody.innerHTML=entries.map(e=>`<tr>
     <td>STR-${String(e.nr||'?').padStart(4,'0')}</td>
     <td>${e.datum||''}</td><td>${e.zeit||''}</td>
-    <td>${e.anlage||''}</td><td>${e.anlagenteil||''}</td><td>${e.kanalObjekt||''}</td>
+    <td>${e.anlage||''}</td><td>${e.anlagenteil||''}</td><td>${e.anlagenteilDetail||''}</td><td>${e.kanalObjekt||''}</td>
     <td>${e.art||''}</td><td>${e.desc||''}</td><td>${e.prio||''}</td>
     <td>${e.melderGruppe||''} ${e.melderPerson||''}</td>
     <td>${e.behGruppe||''} ${e.behPerson||''}</td>
@@ -1685,12 +1750,12 @@ window.exportExcel=()=>{
   });
   const avg=dauN>0?(totalH/dauN).toFixed(1):'–';
 
-  const headers=['Nr.','Datum','Uhrzeit','Anlage','Bereich','Bauwerk','Störungsart','Priorität','Beschreibung',
+  const headers=['Nr.','Datum','Uhrzeit','Anlage','Bereich','Detail','Bauwerk','Störungsart','Priorität','Beschreibung',
     'Gemeldet (Gruppe)','Gemeldet (Person)','Gemeldet (Telefon)','Bearbeitet (Gruppe)','Bearbeitet (Person)','Bearbeitet (Telefon)',
     'Dauer','Maßnahmen','Status'];
   const rows=entries.map(e=>[
     `STR-${String(e.nr||'?').padStart(4,'0')}`,
-    e.datum||'',e.zeit||'',e.anlage||'',e.anlagenteil||'',e.kanalObjekt||'',e.art||'',e.prio||'',
+    e.datum||'',e.zeit||'',e.anlage||'',e.anlagenteil||'',e.anlagenteilDetail||'',e.kanalObjekt||'',e.art||'',e.prio||'',
     e.desc||'',e.melderGruppe||'',e.melderPerson||'',e.melderTel||'',
     e.behGruppe||'',e.behPerson||'',e.behTel||'',e.dauer||'',e.massnahmen||'',e.status||''
   ]);
