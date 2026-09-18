@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Störungsbuch – Kläranlage / Kanalbetrieb</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- Für echten Excel-Export (.xlsx) mit eingebetteten Diagrammen -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
 :root {
   --bg:#141618; --bg2:#1c1f22; --surface:#22262b; --surface2:#2a2f36; --surface3:#313840;
@@ -1734,59 +1737,235 @@ window.printEntries=()=>{
   window.print();
 };
 
-// ── EXCEL EXPORT ──
-window.exportExcel=()=>{
-  if(!entries.length){showToast('Keine Daten','err');return;}
-  const artCount={},anlageCount={},bearbeiterCount={},dauerCount={'1h':0,'2h':0,'3h':0,'4h':0,'5h':0,'6h':0,'7h':0,'8h':0,'>8h':0};
-  let totalH=0,dauN=0;
-  entries.forEach(e=>{
-    if(e.art) artCount[e.art]=(artCount[e.art]||0)+1;
-    if(e.anlage) anlageCount[e.anlage]=(anlageCount[e.anlage]||0)+1;
-    const b=e.behGruppe?(e.behGruppe+(e.behPerson?' · '+e.behPerson:'')):null;
-    if(b) bearbeiterCount[b]=(bearbeiterCount[b]||0)+1;
-    if(e.dauer&&DAUERH[e.dauer]!==undefined){
-      dauerCount[e.dauer]=(dauerCount[e.dauer]||0)+1;
-      totalH+=DAUERH[e.dauer];dauN++;
+// ── EXCEL EXPORT (echte .xlsx-Datei mit Rohdaten + Auswertungen + Diagrammen) ──
+
+// Rendert ein Diagramm (Chart.js) offscreen und liefert es als PNG-DataURL zurück
+function renderChartImage({type,labels,data,title,colors,width=600,height=320,horizontal=false,cutout}){
+  return new Promise(resolve=>{
+    const canvas=document.createElement('canvas');
+    canvas.width=width;canvas.height=height;
+    const ctx=canvas.getContext('2d');
+    const chart=new Chart(ctx,{
+      type,
+      data:{labels,datasets:[{label:title,data,
+        backgroundColor:colors||'#3d8b6e',borderColor:'#1c1f22',borderWidth:1}]},
+      options:{
+        responsive:false,animation:false,devicePixelRatio:2,
+        indexAxis:horizontal?'y':'x',
+        cutout,
+        plugins:{
+          legend:{display:(type==='pie'||type==='doughnut'),position:'right',labels:{color:'#222',font:{size:11}}},
+          title:{display:!!title,text:title,color:'#222',font:{size:14,weight:'bold'}}
+        },
+        scales:(type==='pie'||type==='doughnut')?{}:{
+          x:{ticks:{color:'#333',font:{size:10}},grid:{color:'#e8e8e8'},beginAtZero:!horizontal},
+          y:{ticks:{color:'#333',font:{size:10}},grid:{color:'#e8e8e8'},beginAtZero:horizontal}
+        }
+      }
+    });
+    // kurzer Timeout, damit Chart.js vollständig gerendert hat, bevor das Bild gezogen wird
+    setTimeout(()=>{
+      const url=canvas.toDataURL('image/png');
+      chart.destroy();
+      resolve(url);
+    },60);
+  });
+}
+
+// Berechnet alle Kennzahlen für eine Teilmenge von Störungen (Gesamt oder eine einzelne Anlage)
+function computeAuswertung(list){
+  const artCount={};
+  list.forEach(e=>{if(e.art) artCount[e.art]=(artCount[e.art]||0)+1;});
+
+  const teilCount={};
+  list.forEach(e=>{if(e.anlagenteil) teilCount[e.anlagenteil]=(teilCount[e.anlagenteil]||0)+1;});
+
+  const withDauer=list.filter(e=>e.dauer&&DAUERH[e.dauer]!==undefined);
+  const totalH=withDauer.reduce((s,e)=>s+DAUERH[e.dauer],0);
+  const avgH=withDauer.length>0?(totalH/withDauer.length):null;
+
+  const rufEntries=list.filter(e=>e.rufbereitschaft);
+  const rufKategorien=['Dienstende - 21:00 Uhr','21:00 - 06:00 Uhr','Wochenende/Feiertag'];
+  const rufZeitCount={},rufZeitStunden={};
+  rufKategorien.forEach(k=>{rufZeitCount[k]=0;rufZeitStunden[k]=0;});
+  let rufTotalH=0,rufOhneZeitraum=0;
+  rufEntries.forEach(e=>{
+    const h=(e.dauer&&DAUERH[e.dauer]!==undefined)?DAUERH[e.dauer]:0;
+    rufTotalH+=h;
+    if(e.rufbereitschaftZeit&&rufZeitCount[e.rufbereitschaftZeit]!==undefined){
+      rufZeitCount[e.rufbereitschaftZeit]++;
+      rufZeitStunden[e.rufbereitschaftZeit]+=h;
+    }else{
+      rufOhneZeitraum++;
     }
   });
-  const avg=dauN>0?(totalH/dauN).toFixed(1):'–';
 
-  const headers=['Nr.','Datum','Uhrzeit','Anlage','Bereich','Detail','Bauwerk','Störungsart','Priorität','Beschreibung',
-    'Gemeldet (Gruppe)','Gemeldet (Person)','Gemeldet (Telefon)','Bearbeitet (Gruppe)','Bearbeitet (Person)','Bearbeitet (Telefon)',
-    'Dauer','Maßnahmen','Status'];
-  const rows=entries.map(e=>[
-    `STR-${String(e.nr||'?').padStart(4,'0')}`,
-    e.datum||'',e.zeit||'',e.anlage||'',e.anlagenteil||'',e.anlagenteilDetail||'',e.kanalObjekt||'',e.art||'',e.prio||'',
-    e.desc||'',e.melderGruppe||'',e.melderPerson||'',e.melderTel||'',
-    e.behGruppe||'',e.behPerson||'',e.behTel||'',e.dauer||'',e.massnahmen||'',e.status||''
-  ]);
+  const statusCount={Offen:0,'In Arbeit':0,Behoben:0};
+  list.forEach(e=>{if(statusCount[e.status]!==undefined) statusCount[e.status]++;});
 
-  const auswertung=[
-    ['=== AUSWERTUNG ==='],[''],
-    ['-- Störungshäufigkeit nach Art --'],['Störungsart','Anzahl'],
-    ...Object.entries(artCount).sort((a,b)=>b[1]-a[1]),
-    [''],['-- Häufigkeit nach Anlage --'],['Anlage','Anzahl'],
-    ...Object.entries(anlageCount).sort((a,b)=>b[1]-a[1]),
-    [''],['-- Dauer der Behebung --'],['Dauer','Anzahl'],
-    ...Object.entries(dauerCount).filter(([,v])=>v>0),
-    ['Ø Bearbeitungszeit (h)', avg],
-    [''],['-- Bearbeiter-Einsätze --'],['Bearbeiter','Einsätze'],
-    ...Object.entries(bearbeiterCount).sort((a,b)=>b[1]-a[1]),
-    [''],['-- Gesamtübersicht --'],
-    ['Gesamt Störungen',entries.length],
-    ['Offen',entries.filter(e=>e.status==='Offen').length],
-    ['In Arbeit',entries.filter(e=>e.status==='In Arbeit').length],
-    ['Behoben',entries.filter(e=>e.status==='Behoben').length],
+  return {gesamt:list.length,artCount,teilCount,avgH,totalH,
+    rufCount:rufEntries.length,rufTotalH,rufZeitCount,rufZeitStunden,rufOhneZeitraum,statusCount};
+}
+
+// Legt für eine Teilmenge (Gesamt oder eine Anlage) ein Auswertungs-Tabellenblatt mit Diagrammen an
+async function addAuswertungSheet(workbook,sheetName,list,anlageLabel,anlageBreakdown){
+  const s=computeAuswertung(list);
+  const ws=workbook.addWorksheet(sheetName,{views:[{showGridLines:false}]});
+  ws.getColumn(1).width=38;ws.getColumn(2).width=14;ws.getColumn(3).width=3;
+  for(let c=4;c<=13;c++) ws.getColumn(c).width=9;
+
+  let row=1;
+  const titleCell=ws.getCell(`A${row}`);
+  titleCell.value=`Auswertung – ${anlageLabel}`;
+  titleCell.font={bold:true,size:15,color:{argb:'FF1F4E3D'}};
+  row+=2;
+
+  // ── KPI-Block ──
+  const kpis=[
+    ['Anzahl Störungen',s.gesamt],
+    ['Ø Behebungsdauer (h)',s.avgH!==null?Number(s.avgH.toFixed(1)):'–'],
+    ['Summe Behebungsdauer (h)',s.totalH],
+    ['Rufbereitschaft – Anzahl Einsätze',s.rufCount],
+    ['Rufbereitschaft – Stunden gesamt',s.rufTotalH],
+    ['davon Tag/Abend (Dienstende–21 Uhr)',s.rufZeitStunden['Dienstende - 21:00 Uhr']],
+    ['davon Nacht (21–06 Uhr)',s.rufZeitStunden['21:00 - 06:00 Uhr']],
+    ['davon Wochenende/Feiertag',s.rufZeitStunden['Wochenende/Feiertag']],
   ];
-
-  const toCSV=r=>r.map(row=>row.map(v=>`"${String(v||'').replace(/"/g,'""')}"`).join(';')).join('\n');
-  const csv='\uFEFF'+'ROHDATEN\n'+toCSV([headers,...rows])+'\n\n'+toCSV(auswertung);
-  const a=Object.assign(document.createElement('a'),{
-    href:URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'})),
-    download:`stoerungsbuch_${new Date().toISOString().slice(0,10)}.csv`
+  kpis.forEach(([k,v])=>{
+    ws.getCell(`A${row}`).value=k;ws.getCell(`A${row}`).font={bold:true};
+    ws.getCell(`B${row}`).value=v;
+    ws.getCell(`A${row}`).border={bottom:{style:'hair',color:{argb:'FFDDDDDD'}}};
+    ws.getCell(`B${row}`).border={bottom:{style:'hair',color:{argb:'FFDDDDDD'}}};
+    row++;
   });
-  a.click();
-  showToast('📊 Auswertung exportiert','ok');
+  row+=2;
+
+  // ── Tabelle: betroffene Anlagenteile ──
+  const teilEntries=Object.entries(s.teilCount).sort((a,b)=>b[1]-a[1]);
+  ws.getCell(`A${row}`).value='Betroffene Anlagenteile';ws.getCell(`A${row}`).font={bold:true,size:12};row++;
+  ws.getCell(`A${row}`).value='Anlagenteil';ws.getCell(`B${row}`).value='Anzahl';ws.getRow(row).font={bold:true};row++;
+  const teilTableStart=row;
+  teilEntries.forEach(([k,v])=>{ws.getCell(`A${row}`).value=k;ws.getCell(`B${row}`).value=v;row++;});
+  if(!teilEntries.length){ws.getCell(`A${row}`).value='– keine Daten –';row++;}
+  row+=2;
+
+  // ── Tabelle: Störungen nach Art ──
+  const artEntries=Object.entries(s.artCount).sort((a,b)=>b[1]-a[1]);
+  ws.getCell(`A${row}`).value='Störungen nach Art';ws.getCell(`A${row}`).font={bold:true,size:12};row++;
+  ws.getCell(`A${row}`).value='Störungsart';ws.getCell(`B${row}`).value='Anzahl';ws.getRow(row).font={bold:true};row++;
+  artEntries.forEach(([k,v])=>{ws.getCell(`A${row}`).value=k;ws.getCell(`B${row}`).value=v;row++;});
+  if(!artEntries.length){ws.getCell(`A${row}`).value='– keine Daten –';row++;}
+  row+=2;
+
+  // ── Diagramme rechts daneben einfügen (Spalte D = Index 3) ──
+  let imgTopPx=10;
+  const pxPerRow=20;
+
+  if(anlageBreakdown){
+    const anlageCount={};
+    list.forEach(e=>{const k=ANLAGE_ORDER.includes(e.anlage)?e.anlage:'Sonstige';anlageCount[k]=(anlageCount[k]||0)+1;});
+    const labels=Object.keys(anlageCount),data=Object.values(anlageCount);
+    const h=260;
+    const url=await renderChartImage({type:'bar',labels,data,title:'Störungen je Anlage',
+      colors:['#3d8b6e','#4a7fc1','#9b59b6','#d4891a'],width:620,height:h});
+    const imgId=workbook.addImage({base64:url,extension:'png'});
+    ws.addImage(imgId,{tl:{col:3,row:(imgTopPx/pxPerRow)},ext:{width:620,height:h}});
+    imgTopPx+=h+20;
+  }
+
+  if(teilEntries.length){
+    const h=Math.max(240,teilEntries.length*22);
+    const url=await renderChartImage({type:'bar',horizontal:true,
+      labels:teilEntries.map(x=>x[0]),data:teilEntries.map(x=>x[1]),
+      title:'Störungen je Anlagenteil',colors:'#4a7fc1',width:620,height:h});
+    const imgId=workbook.addImage({base64:url,extension:'png'});
+    ws.addImage(imgId,{tl:{col:3,row:(imgTopPx/pxPerRow)},ext:{width:620,height:h}});
+    imgTopPx+=h+20;
+  }
+
+  if(artEntries.length){
+    const h=Math.max(220,artEntries.length*22);
+    const url=await renderChartImage({type:'bar',horizontal:true,
+      labels:artEntries.map(x=>x[0]),data:artEntries.map(x=>x[1]),
+      title:'Störungen nach Art',colors:'#d4891a',width:620,height:h});
+    const imgId=workbook.addImage({base64:url,extension:'png'});
+    ws.addImage(imgId,{tl:{col:3,row:(imgTopPx/pxPerRow)},ext:{width:620,height:h}});
+    imgTopPx+=h+20;
+  }
+
+  const rufLabels=['Tag/Abend (Dienstende–21 Uhr)','Nacht (21–06 Uhr)','Wochenende/Feiertag'];
+  const rufData=[s.rufZeitStunden['Dienstende - 21:00 Uhr'],s.rufZeitStunden['21:00 - 06:00 Uhr'],s.rufZeitStunden['Wochenende/Feiertag']];
+  if(rufData.some(v=>v>0)){
+    const h=300;
+    const url=await renderChartImage({type:'doughnut',labels:rufLabels,data:rufData,
+      title:'Rufbereitschaftsstunden nach Zeitraum',colors:['#4a7fc1','#2d2d55','#9b59b6'],width:460,height:h});
+    const imgId=workbook.addImage({base64:url,extension:'png'});
+    ws.addImage(imgId,{tl:{col:3,row:(imgTopPx/pxPerRow)},ext:{width:460,height:h}});
+    imgTopPx+=h+20;
+  }else if(s.rufCount>0){
+    ws.getCell(`D${Math.round(imgTopPx/pxPerRow)+1}`).value='Rufbereitschaft erfasst, aber ohne Zeitraum-Angabe – keine Tag/Nacht-Auswertung möglich.';
+    ws.getCell(`D${Math.round(imgTopPx/pxPerRow)+1}`).font={italic:true,color:{argb:'FF888888'}};
+  }
+
+  return s;
+}
+
+window.exportExcel=async()=>{
+  if(!entries.length){showToast('Keine Daten','err');return;}
+  if(typeof ExcelJS==='undefined'||typeof Chart==='undefined'){
+    showToast('⚠ Excel-Bibliothek konnte nicht geladen werden (Internetverbindung prüfen)','err');return;
+  }
+  showToast('📊 Erstelle Excel-Datei…','ok');
+
+  try{
+    const workbook=new ExcelJS.Workbook();
+    workbook.creator='Störungsbuch';
+    workbook.created=new Date();
+
+    // ── 1) Rohdaten ──
+    const headers=['Nr.','Datum','Uhrzeit','Anlage','Bereich','Detail','Bauwerk','Störungsart','Priorität','Beschreibung',
+      'Gemeldet (Gruppe)','Gemeldet (Person)','Gemeldet (Telefon)','Bearbeitet (Gruppe)','Bearbeitet (Person)','Bearbeitet (Telefon)',
+      'Dauer','Dauer (h)','Rufbereitschaft','Rufbereitschaft Zeitraum','Maßnahmen','Status'];
+    const rd=workbook.addWorksheet('Rohdaten');
+    rd.addRow(headers);
+    rd.getRow(1).eachCell(c=>{
+      c.font={bold:true,color:{argb:'FFFFFFFF'}};
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2D6B54'}};
+    });
+    entries.forEach(e=>{
+      rd.addRow([
+        `STR-${String(e.nr||'?').padStart(4,'0')}`,
+        e.datum||'',e.zeit||'',e.anlage||'',e.anlagenteil||'',e.anlagenteilDetail||'',e.kanalObjekt||'',e.art||'',e.prio||'',
+        e.desc||'',e.melderGruppe||'',e.melderPerson||'',e.melderTel||'',
+        e.behGruppe||'',e.behPerson||'',e.behTel||'',e.dauer||'',
+        (e.dauer&&DAUERH[e.dauer]!==undefined)?DAUERH[e.dauer]:'',
+        e.rufbereitschaft?'Ja':'Nein',e.rufbereitschaftZeit||'',
+        e.massnahmen||'',e.status||''
+      ]);
+    });
+    rd.columns.forEach((col,i)=>{col.width=[10,11,8,13,20,16,20,18,10,32,14,14,14,14,14,14,7,9,12,20,32,11][i]||14;});
+    rd.autoFilter={from:'A1',to:`${rd.getColumn(headers.length).letter}1`};
+    rd.views=[{state:'frozen',ySplit:1}];
+
+    // ── 2) Gesamtauswertung ──
+    await addAuswertungSheet(workbook,'Gesamtauswertung',entries,'Alle Anlagen',true);
+
+    // ── 3) je Anlage (3 Anlagen) ──
+    await addAuswertungSheet(workbook,'Auswertung Kreuztal',entries.filter(e=>e.anlage==='Kreuztal'),'Kläranlage Kreuztal',false);
+    await addAuswertungSheet(workbook,'Auswertung Buschhütten',entries.filter(e=>e.anlage==='Buschhütten'),'Kläranlage Buschhütten',false);
+    await addAuswertungSheet(workbook,'Auswertung Kanal',entries.filter(e=>e.anlage==='Kanal'),'Kanalbetrieb',false);
+
+    const buffer=await workbook.xlsx.writeBuffer();
+    const a=Object.assign(document.createElement('a'),{
+      href:URL.createObjectURL(new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})),
+      download:`stoerungsbuch_${new Date().toISOString().slice(0,10)}.xlsx`
+    });
+    a.click();
+    showToast('📊 Excel-Auswertung exportiert','ok');
+  }catch(err){
+    console.error(err);
+    showToast('⚠ Fehler beim Excel-Export','err');
+  }
 };
 
 // ── HELPERS ──
