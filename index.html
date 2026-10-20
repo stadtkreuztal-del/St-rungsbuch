@@ -378,6 +378,18 @@ textarea{resize:vertical;min-height:70px;}
 .login-footer-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);}
 #appContent{display:none;}
 
+/* Auswertung-Dialog */
+#auswertungModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;padding:16px;}
+#auswertungModal.show{display:flex;}
+.aw-box{background:var(--surface,#1c1f22);color:var(--text,#e8e8e8);border:1px solid var(--border,#333);border-radius:12px;padding:22px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:12px;}
+.aw-box h3{margin:0;font-size:16px;}
+.aw-box label{font-size:12px;opacity:.8;display:flex;flex-direction:column;gap:6px;}
+.aw-box input,.aw-box select{padding:9px 10px;border-radius:8px;border:1px solid var(--border,#444);background:var(--bg,#111);color:inherit;font-size:14px;}
+.aw-err{display:none;color:#e66;font-size:12px;}
+.aw-err.show{display:block;}
+.aw-btns{display:flex;gap:8px;justify-content:flex-end;}
+
+
 #printTable{display:none;}
 .loading-msg{padding:28px;text-align:center;color:var(--text-dim);font-family:var(--mono);font-size:12px;}
 </style>
@@ -508,6 +520,32 @@ textarea{resize:vertical;min-height:70px;}
       <button class="btn btn-secondary" onclick="printEntries()">🖨 Drucken / PDF</button>
       <button class="btn btn-warn" onclick="exportExcel()">📊 Excel-Auswertung</button>
     </div>
+
+<!-- Auswertung: Passwort + Monatsauswahl -->
+<div id="auswertungModal" class="no-print">
+  <div class="aw-box">
+    <h3>📊 Excel-Auswertung</h3>
+    <div id="awStep1" style="display:flex;flex-direction:column;gap:12px;">
+      <label>Auswertungs-Passwort
+        <input type="password" id="awPw" placeholder="Passwort eingeben …" onkeydown="if(event.key==='Enter') awCheckPw()">
+      </label>
+      <div class="aw-err" id="awErr">❌ Falsches Passwort.</div>
+      <div class="aw-btns">
+        <button class="btn btn-secondary" type="button" onclick="awClose()">Abbrechen</button>
+        <button class="btn btn-warn" type="button" onclick="awCheckPw()">Weiter →</button>
+      </div>
+    </div>
+    <div id="awStep2" style="display:none;flex-direction:column;gap:12px;">
+      <label>Monat auswählen
+        <select id="awMonth"></select>
+      </label>
+      <div class="aw-btns">
+        <button class="btn btn-secondary" type="button" onclick="awClose()">Abbrechen</button>
+        <button class="btn btn-warn" type="button" onclick="awRun()">Excel erstellen</button>
+      </div>
+    </div>
+  </div>
+</div>
 
     <!-- Neue Störung -->
     <div class="card" id="formCard">
@@ -789,11 +827,11 @@ const ANLAGENTEIL = {
 };
 const ANLAGENTEIL_DETAIL = {
   Kreuztal:{
-    'Zulauf':['Allgemein','Abluft','Gebäude','Grobrechen','Feinrechen','Messeinrichtung','Pumpwerk','Transporteinheit'],
+    'Zulauf':['Allgemein','Abluft','Gebäude','Grobrechen','Feinrechen','Messeinrichtung','Pumpwerk','Rührwerk','Transporteinheit'],
     'Sandfang':['Allgemein','Abluft','Becken','Gebäude','Gebläse','Messeinrichtung','Pumpe','Räumer','Transporteinheit','Wäscher'],
     'Zwischenklärung':['Allgemein','Pumpe','Räumer','RLS Pumpwerk'],
     'Belebung Vorstufe':['Allgemein','Ablauf','Becken','Gebläse','Messeinrichtung'],
-    'Belebung Hauptstufe':['Allgemein','Ablauf','Becken','Gebläse','Messeinrichtung'],
+    'Belebung Hauptstufe':['Allgemein','Ablauf','Becken','Gebläse','Messeinrichtung','Rührwerk'],
     'Nachklärung':['Allgemein','Becken','Gebäude','Messeinrichtung','Pumpe','Räumer','RLS Pumpwerk'],
     'Fällmittelstation':['Allgemein','Gebäude','Messeinrichtung','Pumpe','Fällmitteltank'],
     'Filtration':['Allgemein','Becken','Filter','Gebäude','Gebläse','Messeinrichtung','Pumpe'],
@@ -1973,8 +2011,47 @@ async function addAuswertungSheet(workbook,sheetName,list,anlageLabel,anlageBrea
   return s;
 }
 
-window.exportExcel=async()=>{
+const AUSWERTUNG_PW='@Auswertung#456';
+const MONATE_DE=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+function monthLabel(key){const [y,m]=key.split('-');return `${MONATE_DE[parseInt(m,10)-1]} ${y}`;}
+
+window.exportExcel=()=>{
   if(!entries.length){showToast('Keine Daten','err');return;}
+  document.getElementById('awPw').value='';
+  document.getElementById('awErr').classList.remove('show');
+  document.getElementById('awStep1').style.display='flex';
+  document.getElementById('awStep2').style.display='none';
+  document.getElementById('auswertungModal').classList.add('show');
+  setTimeout(()=>document.getElementById('awPw').focus(),50);
+};
+window.awClose=()=>document.getElementById('auswertungModal').classList.remove('show');
+window.awCheckPw=()=>{
+  const inp=document.getElementById('awPw');
+  if(inp.value!==AUSWERTUNG_PW){
+    inp.value='';
+    document.getElementById('awErr').classList.add('show');
+    inp.focus();return;
+  }
+  // Monate aus den vorhandenen Einträgen (YYYY-MM), neueste zuerst
+  const keys=[...new Set(entries.map(e=>(e.datum||'').slice(0,7)).filter(k=>/^\d{4}-\d{2}$/.test(k)))].sort().reverse();
+  const sel=document.getElementById('awMonth');
+  sel.innerHTML='<option value="ALL">Alle Monate (Gesamt)</option>'+
+    keys.map(k=>{const n=entries.filter(e=>(e.datum||'').startsWith(k)).length;return `<option value="${k}">${monthLabel(k)} (${n} Einträge)</option>`;}).join('');
+  document.getElementById('awStep1').style.display='none';
+  document.getElementById('awStep2').style.display='flex';
+};
+window.awRun=()=>{
+  const key=document.getElementById('awMonth').value;
+  awClose();
+  runExcelExport(key);
+};
+
+async function runExcelExport(monthKey){
+  const allEntries=entries;
+  const entriesSel=monthKey==='ALL'?allEntries:allEntries.filter(e=>(e.datum||'').startsWith(monthKey));
+  const periodLabel=monthKey==='ALL'?'Alle Monate':monthLabel(monthKey);
+  const sheetSuffix=monthKey==='ALL'?'':' '+monthKey.slice(5,7)+'-'+monthKey.slice(0,4);
+  if(!entriesSel.length){showToast('Keine Daten im gewählten Monat','err');return;}
   if(typeof ExcelJS==='undefined'||typeof Chart==='undefined'){
     showToast('⚠ Excel-Bibliothek konnte nicht geladen werden (Internetverbindung prüfen)','err');return;
   }
@@ -1995,7 +2072,7 @@ window.exportExcel=async()=>{
       c.font={bold:true,color:{argb:'FFFFFFFF'}};
       c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2D6B54'}};
     });
-    entries.forEach(e=>{
+    entriesSel.forEach(e=>{
       rd.addRow([
         `STR-${String(e.nr||'?').padStart(4,'0')}`,
         e.datum||'',e.zeit||'',e.anlage||'',e.anlagenteil||'',e.anlagenteilDetail||'',e.kanalObjekt||'',e.art||'',e.prio||'',
@@ -2011,17 +2088,17 @@ window.exportExcel=async()=>{
     rd.views=[{state:'frozen',ySplit:1}];
 
     // ── 2) Gesamtauswertung ──
-    await addAuswertungSheet(workbook,'Gesamtauswertung',entries,'Alle Anlagen',true);
+    await addAuswertungSheet(workbook,'Gesamtauswertung'+sheetSuffix,entriesSel,'Alle Anlagen – '+periodLabel,true);
 
     // ── 3) je Anlage (3 Anlagen) ──
-    await addAuswertungSheet(workbook,'Auswertung Kreuztal',entries.filter(e=>e.anlage==='Kreuztal'),'Kläranlage Kreuztal',false);
-    await addAuswertungSheet(workbook,'Auswertung Buschhütten',entries.filter(e=>e.anlage==='Buschhütten'),'Kläranlage Buschhütten',false);
-    await addAuswertungSheet(workbook,'Auswertung Kanal',entries.filter(e=>e.anlage==='Kanal'),'Kanalbetrieb',false);
+    await addAuswertungSheet(workbook,'Auswertung Kreuztal'+sheetSuffix,entriesSel.filter(e=>e.anlage==='Kreuztal'),'Kläranlage Kreuztal – '+periodLabel,false);
+    await addAuswertungSheet(workbook,'Auswertung Buschhütten'+sheetSuffix,entriesSel.filter(e=>e.anlage==='Buschhütten'),'Kläranlage Buschhütten – '+periodLabel,false);
+    await addAuswertungSheet(workbook,'Auswertung Kanal'+sheetSuffix,entriesSel.filter(e=>e.anlage==='Kanal'),'Kanalbetrieb – '+periodLabel,false);
 
     const buffer=await workbook.xlsx.writeBuffer();
     const a=Object.assign(document.createElement('a'),{
       href:URL.createObjectURL(new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})),
-      download:`stoerungsbuch_${new Date().toISOString().slice(0,10)}.xlsx`
+      download:`stoerungsbuch_${monthKey==='ALL'?'gesamt':monthKey}_${new Date().toISOString().slice(0,10)}.xlsx`
     });
     a.click();
     showToast('📊 Excel-Auswertung exportiert','ok');
@@ -2029,7 +2106,7 @@ window.exportExcel=async()=>{
     console.error(err);
     showToast('⚠ Fehler beim Excel-Export','err');
   }
-};
+}
 
 // ── HELPERS ──
 function fmtDt(dt){
