@@ -255,6 +255,17 @@ textarea{resize:vertical;min-height:70px;}
 .jump-date-wrap label{font-size:11px;color:var(--text-muted);font-family:var(--mono);white-space:nowrap;}
 .jump-date-wrap input[type=date]{width:auto;padding:6px 9px;font-size:12px;}
 .jump-date-wrap .btn-sm{padding:6px 10px;font-size:11px;}
+.entry-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;}
+.entry-filters .ef-field{display:flex;flex-direction:column;gap:3px;min-width:160px;flex:1 1 160px;}
+.entry-filters .ef-field label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;
+  color:var(--text-muted);font-family:var(--mono);}
+.entry-filters select{width:100%;padding:7px 10px;background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;color:var(--text);font-size:12px;font-family:var(--sans);outline:none;}
+.entry-filters select:focus{border-color:var(--accent);}
+.entry-filters select.is-set{border-color:var(--accent);font-weight:600;}
+.entry-filters .ef-count{font-size:11px;font-family:var(--mono);color:var(--text-muted);padding-bottom:9px;white-space:nowrap;}
+.sidebar-filters select.is-set{border-color:var(--accent);font-weight:600;}
 
 /* MODAL */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;
@@ -468,9 +479,15 @@ textarea{resize:vertical;min-height:70px;}
           <option value="">Alle Status</option>
           <option>Offen</option><option>In Arbeit</option><option>Behoben</option>
         </select>
-        <select id="sb-anlage" onchange="renderSidebar()">
+        <select id="sb-anlage" onchange="refreshFilterOptions();renderSidebar()">
           <option value="">Alle Anlagen</option>
           <option>Kreuztal</option><option>Buschhütten</option><option>Kanal</option>
+        </select>
+        <select id="sb-anlagenteil" onchange="renderSidebar()">
+          <option value="">Alle Anlagenteile</option>
+        </select>
+        <select id="sb-art" onchange="renderSidebar()">
+          <option value="">Alle Störungsarten</option>
         </select>
         <select id="sb-prio" onchange="renderSidebar()">
           <option value="">Alle Prioritäten</option>
@@ -753,12 +770,28 @@ textarea{resize:vertical;min-height:70px;}
         <button type="button" class="view-toggle-btn active" data-mode="tag" onclick="setViewMode('tag')">📅 Nach Tag</button>
         <button type="button" class="view-toggle-btn" data-mode="anlage" onclick="setViewMode('anlage')">🏭 Nach Anlage</button>
         <button type="button" class="view-toggle-btn" data-mode="anlagenteil" onclick="setViewMode('anlagenteil')">⚙ Nach Anlagenteil</button>
+        <button type="button" class="view-toggle-btn" data-mode="art" onclick="setViewMode('art')">⚠ Nach Störungsart</button>
       </div>
       <div class="jump-date-wrap">
         <label for="jumpDate">Springe zu:</label>
         <input type="date" id="jumpDate" onchange="jumpToDate(this.value)">
         <button type="button" class="btn btn-sm btn-secondary" onclick="jumpToDate(new Date().toISOString().slice(0,10));document.getElementById('jumpDate').value=new Date().toISOString().slice(0,10);">Heute</button>
       </div>
+    </div>
+
+    <!-- Filter für die Eintragsliste -->
+    <div class="entry-filters no-print" id="entryFilters">
+      <div class="ef-field"><label for="cf-anlage">Anlage</label>
+        <select id="cf-anlage" onchange="refreshFilterOptions();renderCards()">
+          <option value="">Alle Anlagen</option>
+          <option>Kreuztal</option><option>Buschhütten</option><option>Kanal</option>
+        </select></div>
+      <div class="ef-field"><label for="cf-anlagenteil">Anlagenteil / Bereich</label>
+        <select id="cf-anlagenteil" onchange="renderCards()"><option value="">Alle Anlagenteile</option></select></div>
+      <div class="ef-field"><label for="cf-art">Störungsart</label>
+        <select id="cf-art" onchange="renderCards()"><option value="">Alle Störungsarten</option></select></div>
+      <button type="button" class="btn btn-sm btn-secondary" onclick="resetEntryFilters()">✕ Zurücksetzen</button>
+      <span class="ef-count" id="cfCount"></span>
     </div>
 
     <!-- Eintrags-Karten -->
@@ -889,7 +922,7 @@ onSnapshot(q,snap=>{
   entries=snap.docs.map(d=>({id:d.id,...d.data()}));
   lfdNr=entries.length>0?Math.max(...entries.map(e=>e.nr||0))+1:1;
   document.getElementById('f-nr').value='STR-'+String(lfdNr).padStart(4,'0');
-  renderSidebar();renderCards();updateStats();
+  refreshFilterOptions();renderSidebar();renderCards();updateStats();
   setSyncState('online');
 },err=>{console.error(err);setSyncState('offline');showToast('⚠ Verbindungsfehler','err');});
 
@@ -908,6 +941,7 @@ window.showTab = t => {
   document.getElementById('statsBar').style.display=t==='list'?'grid':'none';
   document.getElementById('formCard').style.display=t==='form'?'block':'none';
   document.getElementById('entryCards').style.display=t==='list'?'block':'none';
+  document.getElementById('entryFilters').style.display=t==='list'?'flex':'none';
   document.querySelector('.action-bar').style.display=t==='list'?'flex':'none';
 };
 window.openSidebar=()=>{
@@ -1520,11 +1554,58 @@ window.filterRufbereitschaft=()=>{
   showToast(rufFilter?'🔔 Nur Rufbereitschaft':'Alle Meldungen','ok');
 };
 
+// ── FILTER (Anlage / Anlagenteil / Störungsart) ──
+// Die Auswahllisten werden aus den vorhandenen Einträgen aufgebaut und mit Anzahl angezeigt.
+// "Anlagenteil" zeigt nur Bereiche der gewählten Anlage.
+const FILTER_SETS=[
+  {anlage:'sb-anlage', teil:'sb-anlagenteil', art:'sb-art'},
+  {anlage:'cf-anlage', teil:'cf-anlagenteil', art:'cf-art'}
+];
+function fillSelect(sel,allLabel,counts){
+  if(!sel) return;
+  const prev=sel.value;
+  const keys=Object.keys(counts).sort((a,b)=>a.localeCompare(b,'de'));
+  sel.innerHTML=`<option value="">${allLabel}</option>`+
+    keys.map(k=>`<option value="${k.replace(/"/g,'&quot;')}">${k} (${counts[k]})</option>`).join('');
+  sel.value=keys.includes(prev)?prev:'';   // Auswahl behalten, wenn noch vorhanden
+  sel.classList.toggle('is-set',!!sel.value);
+}
+window.refreshFilterOptions=()=>{
+  FILTER_SETS.forEach(set=>{
+    const fa=document.getElementById(set.anlage);
+    const st=document.getElementById(set.teil);
+    const ar=document.getElementById(set.art);
+    if(!fa||!st||!ar) return;
+    const anl=fa.value;
+    fa.classList.toggle('is-set',!!anl);
+    const teilCounts={}, artCounts={};
+    entries.forEach(e=>{
+      if(anl&&e.anlage!==anl) return;
+      const t=(e.anlagenteil||'').trim(); if(t) teilCounts[t]=(teilCounts[t]||0)+1;
+    });
+    entries.forEach(e=>{
+      if(anl&&e.anlage!==anl) return;
+      const a=(e.art||'').trim(); if(a) artCounts[a]=(artCounts[a]||0)+1;
+    });
+    fillSelect(st,'Alle Anlagenteile',teilCounts);
+    fillSelect(ar,'Alle Störungsarten',artCounts);
+  });
+};
+function matchesFilter(e,anlage,teil,art){
+  return (!anlage||e.anlage===anlage)
+      && (!teil||(e.anlagenteil||'').trim()===teil)
+      && (!art||(e.art||'').trim()===art);
+}
+window.resetEntryFilters=()=>{
+  ['cf-anlage','cf-anlagenteil','cf-art'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+  refreshFilterOptions();renderCards();
+};
+
 // ── RENDER CARDS ──
 const ANLAGE_ORDER=['Kreuztal','Buschhütten','Kanal'];
 const ANLAGE_LABEL={Kreuztal:'🏭 KA Kreuztal',Buschhütten:'🏭 KA Buschhütten',Kanal:'🕳 Kanal'};
 const ANLAGE_COLORVAR={Kreuztal:'--accent',Buschhütten:'--blue',Kanal:'--warn'};
-let viewMode='tag'; // 'tag' | 'anlage' | 'anlagenteil'
+let viewMode='tag'; // 'tag' | 'anlage' | 'anlagenteil' | 'art'
 
 window.setViewMode=(mode)=>{
   viewMode=mode;
@@ -1599,9 +1680,17 @@ function subGroupBlock(label,colorVar,items){
 
 window.renderCards=()=>{
   const c=document.getElementById('entryCards');
-  let list=rufFilter?entries.filter(e=>e.rufbereitschaft):entries;
+  const cfA=(document.getElementById('cf-anlage')||{}).value||'';
+  const cfT=(document.getElementById('cf-anlagenteil')||{}).value||'';
+  const cfR=(document.getElementById('cf-art')||{}).value||'';
+  ['cf-anlage','cf-anlagenteil','cf-art'].forEach(id=>{const el=document.getElementById(id);if(el) el.classList.toggle('is-set',!!el.value);});
+  const base=rufFilter?entries.filter(e=>e.rufbereitschaft):entries;
+  let list=base.filter(e=>matchesFilter(e,cfA,cfT,cfR));
+  const cnt=document.getElementById('cfCount');
+  if(cnt) cnt.textContent=(cfA||cfT||cfR)?`${list.length} von ${base.length} Einträgen`:`${base.length} Einträge`;
   if(!list.length){
-    c.innerHTML=`<div class="card"><div style="padding:36px;text-align:center;color:var(--text-dim);font-size:13px;">${rufFilter?'🔔 Keine Rufbereitschafts-Meldungen.':'📭 Noch keine Störungen erfasst.'}</div></div>`;
+    const filtered=!!(cfA||cfT||cfR);
+    c.innerHTML=`<div class="card"><div style="padding:36px;text-align:center;color:var(--text-dim);font-size:13px;">${filtered?'🔍 Keine Einträge für diese Filterauswahl.':(rufFilter?'🔔 Keine Rufbereitschafts-Meldungen.':'📭 Noch keine Störungen erfasst.')}</div></div>`;
     return;
   }
 
@@ -1666,6 +1755,36 @@ window.renderCards=()=>{
       </div>`;
     }).join('');
 
+  }else if(viewMode==='art'){
+    // Gruppieren nach Störungsart, darunter nach Tag
+    const byArt={};
+    list.forEach(e=>{
+      const key=(e.art||'').trim()||'– ohne Störungsart –';
+      (byArt[key]=byArt[key]||[]).push(e);
+    });
+    const artKeys=Object.keys(byArt).sort((a,b)=>a.localeCompare(b,'de'));
+
+    c.innerHTML=artKeys.map(ak=>{
+      const artEntries=byArt[ak];
+      const byDate={};
+      artEntries.forEach(e=>{
+        const key=e.datum||'–ohne Datum–';
+        (byDate[key]=byDate[key]||[]).push(e);
+      });
+      const dateKeys=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+      const dateBlocks=dateKeys.map(dk=>{
+        const items=byDate[dk].sort((a,b)=>(b.zeit||'').localeCompare(a.zeit||''));
+        return subGroupBlock('📅 '+dateLabelOf(dk),'--text-dim',items);
+      }).join('');
+      return `<div class="art-group" style="margin-bottom:24px;">
+        <div style="position:sticky;top:0;z-index:5;background:var(--bg);padding:6px 0 8px;margin-bottom:4px;border-bottom:1px solid var(--border);">
+          <span style="font-size:13px;font-weight:600;">⚠ ${ak}</span>
+          <span style="font-size:11px;color:var(--text-dim);font-family:var(--mono);margin-left:8px;">${artEntries.length} Störung${artEntries.length!==1?'en':''}</span>
+        </div>
+        ${dateBlocks}
+      </div>`;
+    }).join('');
+
   }else{ // 'anlagenteil'
     // Gruppieren nach Anlagenteil/Bereich, darunter nach Tag
     const byTeil={};
@@ -1716,9 +1835,14 @@ window.renderSidebar=()=>{
   const fS=document.getElementById('sb-status').value;
   const fA=document.getElementById('sb-anlage').value;
   const fP=document.getElementById('sb-prio').value;
+  const fT=document.getElementById('sb-anlagenteil').value;
+  const fR=document.getElementById('sb-art').value;
+  ['sb-status','sb-anlage','sb-anlagenteil','sb-art','sb-prio'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.classList.toggle('is-set',!!el.value);
+  });
   const filtered=entries.filter(e=>{
-    const ms=!search||[e.titel,e.anlage,e.art,e.melderPerson,e.desc].some(v=>v&&v.toLowerCase().includes(search));
-    return ms&&(!fS||e.status===fS)&&(!fA||e.anlage===fA)&&(!fP||e.prio===fP)&&(!rufFilter||e.rufbereitschaft);
+    const ms=!search||[e.titel,e.anlage,e.art,e.anlagenteil,e.melderPerson,e.desc].some(v=>v&&v.toLowerCase().includes(search));
+    return ms&&(!fS||e.status===fS)&&matchesFilter(e,fA,fT,fR)&&(!fP||e.prio===fP)&&(!rufFilter||e.rufbereitschaft);
   });
   const list=document.getElementById('sidebarList');
   if(!filtered.length){list.innerHTML=`<div class="sidebar-empty">Keine Einträge gefunden.</div>`;return;}
