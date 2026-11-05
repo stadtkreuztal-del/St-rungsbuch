@@ -1012,7 +1012,7 @@ function artListFor(anlage,keep){
   }
   return base;
 }
-function updateArtOptions(prefix){
+window.updateArtOptions=function(prefix){
   const sel=document.getElementById(prefix+'-art');
   const an=document.getElementById(prefix+'-anlage');
   if(!sel||!an) return;
@@ -1020,7 +1020,7 @@ function updateArtOptions(prefix){
   const keep=(cur==='Bandverlauf'&&!KLAERANLAGEN.includes(an.value))?'':cur; // bei Kanal zurücksetzen
   sel.innerHTML='<option value="">'+(prefix==='f'?'– Bitte wählen –':'–')+'</option>'+
     artListFor(an.value,'').map(a=>`<option${a===keep?' selected':''}>${a}</option>`).join('');
-}
+};
 const PRIOMAP={niedrig:'low',mittel:'mid',hoch:'high'};
 const STATMAP={Offen:'offen','In Arbeit':'progress',Behoben:'behoben'};
 const DAUERH={'1h':1,'2h':2,'3h':3,'4h':4,'5h':5,'6h':6,'7h':7,'8h':8,'>8h':9};
