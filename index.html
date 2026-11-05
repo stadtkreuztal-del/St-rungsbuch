@@ -698,7 +698,7 @@ button,select,label,.sidebar-item,.mnav-btn,.view-toggle-btn{touch-action:manipu
           <div class="form-grid">
             <label>
               <span class="label-text">Anlage</span>
-              <select id="f-anlage" onchange="updateAnlagenteil()">
+              <select id="f-anlage" onchange="updateAnlagenteil();updateArtOptions('f')">
                 <option value="">– Bitte wählen –</option>
                 <option value="Kreuztal">Kläranlage Kreuztal</option>
                 <option value="Buschhütten">Kläranlage Buschhütten</option>
@@ -1001,7 +1001,26 @@ const KANAL_OBJEKTE = {
 };
 const STOERUNGSARTEN = ['Pumpenausfall','Aggregat Ausfall','Elektrische Störung','Rohrbruch / Leckage','Überstauereignis',
   'Messwertabweichung','Alarmanlage','Verstopfung','Maschinenschaden','EDV / Steuerung','Geruchsbelästigung','Rattensichtung',
-  'Geruch','Fremdkörper','Einleitungsverstoß','Sonstiges'];
+  'Geruch','Fremdkörper','Einleitungsverstoß','Bandverlauf','Sonstiges'];
+const KLAERANLAGEN=['Kreuztal','Buschhütten'];
+// 'Bandverlauf' ist nur bei den beiden Kläranlagen wählbar
+function artListFor(anlage,keep){
+  const base=STOERUNGSARTEN.filter(a=>a!=='Bandverlauf');
+  if(KLAERANLAGEN.includes(anlage)||keep==='Bandverlauf'){
+    const i=base.indexOf('Sonstiges');
+    base.splice(i<0?base.length:i,0,'Bandverlauf');
+  }
+  return base;
+}
+function updateArtOptions(prefix){
+  const sel=document.getElementById(prefix+'-art');
+  const an=document.getElementById(prefix+'-anlage');
+  if(!sel||!an) return;
+  const cur=sel.value;
+  const keep=(cur==='Bandverlauf'&&!KLAERANLAGEN.includes(an.value))?'':cur; // bei Kanal zurücksetzen
+  sel.innerHTML='<option value="">'+(prefix==='f'?'– Bitte wählen –':'–')+'</option>'+
+    artListFor(an.value,'').map(a=>`<option${a===keep?' selected':''}>${a}</option>`).join('');
+}
 const PRIOMAP={niedrig:'low',mittel:'mid',hoch:'high'};
 const STATMAP={Offen:'offen','In Arbeit':'progress',Behoben:'behoben'};
 const DAUERH={'1h':1,'2h':2,'3h':3,'4h':4,'5h':5,'6h':6,'7h':7,'8h':8,'>8h':9};
@@ -1271,6 +1290,7 @@ window.resetForm=()=>{
   ['f-anlage','f-anlagenteil','f-art','f-melder-gruppe','f-melder-person','f-beh-gruppe','f-beh-person'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.selectedIndex=0;
   });
+  updateArtOptions('f');
   document.getElementById('f-status').value='Offen';
   const rfEl=document.getElementById('f-rufbereitschaft');if(rfEl)rfEl.checked=false;
   const n=new Date();
@@ -1323,7 +1343,7 @@ window.openEditModal=async(id)=>{
   const atDetailOpts=(anlage,teil,selected)=>{
     return ((ANLAGENTEIL_DETAIL[anlage]||{})[teil]||[]).map(t=>`<option${t===selected?' selected':''}>${t}</option>`).join('');
   };
-  const artOpts=selected=>STOERUNGSARTEN.map(a=>`<option${a===selected?' selected':''}>${a}</option>`).join('');
+  const artOpts=selected=>artListFor(e.anlage,selected).map(a=>`<option${a===selected?' selected':''}>${a}</option>`).join('');
   const statusOpts=selected=>['Offen','In Arbeit','Behoben'].map(s=>`<option${s===selected?' selected':''}>${s}</option>`).join('');
   const melderGruppenOpts=sel=>['','Elektriker','Kanal','FAT','Verwaltung','Extern'].map(g=>
     `<option value="${g}"${g===sel?' selected':''}>${g||'– Bitte wählen –'}</option>`).join('');
@@ -1344,7 +1364,7 @@ window.openEditModal=async(id)=>{
     <div class="edit-section-title">02 · Anlage &amp; Bereich</div>
     <div class="edit-grid">
       <label><span class="label-text">Anlage</span>
-        <select id="e-anlage" onchange="editUpdateAnlagenteil()">${anlageOpts(e.anlage)}</select>
+        <select id="e-anlage" onchange="editUpdateAnlagenteil();updateArtOptions('e')">${anlageOpts(e.anlage)}</select>
       </label>
       <label><span class="label-text">Bereich</span>
         <select id="e-anlagenteil" onchange="editUpdateKanalAdresse()"><option value="">– Bitte wählen –</option>${atOpts(e.anlage,e.anlagenteil)}</select>
