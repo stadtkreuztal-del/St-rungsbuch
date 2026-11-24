@@ -232,6 +232,16 @@ textarea{resize:vertical;min-height:70px;}
 .dauer-chip.selected{background:var(--blue-light);border-color:var(--blue);color:var(--blue);font-weight:600;}
 .dauer-chip input[type=checkbox]{display:none;}
 
+/* 05 · Weitere Personen (Reiter) */
+.weitere-wrap{margin-top:2px;}
+.weitere-tab{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border:1px solid var(--border);
+  border-bottom:none;border-radius:7px 7px 0 0;background:transparent;cursor:pointer;font-size:12px;
+  font-family:var(--mono);color:var(--text-muted);transition:all .15s;}
+.weitere-tab:hover{border-color:var(--blue);color:var(--blue);}
+.weitere-tab.open{background:var(--blue-light);border-color:var(--blue);color:var(--blue);font-weight:600;}
+.weitere-panel{display:none;border:1px solid var(--blue);border-radius:0 7px 7px 7px;padding:11px 12px;}
+.weitere-hint{font-size:11px;color:var(--text-muted);font-family:var(--mono);margin-bottom:8px;}
+
 /* BUTTONS */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 17px;border-radius:7px;
   font-size:13px;font-weight:500;font-family:var(--sans);cursor:pointer;transition:all .15s;border:none;white-space:nowrap;}
@@ -772,7 +782,7 @@ button,select,label,.sidebar-item,.mnav-btn,.view-toggle-btn{touch-action:manipu
               <select id="f-melder-gruppe" onchange="updateMelderPersonen('f-melder-gruppe','f-melder-person','f-extern-wrap')">
                 <option value="">– Bitte wählen –</option>
                 <option>Elektriker</option><option>Kanal</option>
-                <option>FAT</option><option>Verwaltung</option><option>Extern</option>
+                <option>FAT</option><option>Verwaltung</option><option>PLS</option><option>Extern</option>
               </select>
             </label>
             <label>
@@ -800,8 +810,15 @@ button,select,label,.sidebar-item,.mnav-btn,.view-toggle-btn{touch-action:manipu
             </label>
             <label>
               <span class="label-text">Person</span>
-              <select id="f-beh-person"><option value="">– erst Gruppe –</option></select>
+              <select id="f-beh-person" onchange="renderWeitere('f')"><option value="">– erst Gruppe –</option></select>
             </label>
+            <div class="full weitere-wrap" id="f-beh-weitere-wrap" style="display:none">
+              <button type="button" class="weitere-tab" id="f-beh-weitere-tab" onclick="toggleWeitere('f')">👥 Weitere Personen <span id="f-beh-weitere-count"></span></button>
+              <div class="weitere-panel" id="f-beh-weitere-panel">
+                <div class="weitere-hint" id="f-beh-weitere-hint"></div>
+                <div class="dauer-group" id="f-beh-weitere-list"></div>
+              </div>
+            </div>
             <label class="full" id="f-beh-extern-wrap" style="display:none">
               <span class="label-text">Name (Extern)</span>
               <input type="text" id="f-beh-extern" placeholder="Name / Firma">
@@ -956,6 +973,11 @@ const MELDER = {
   Verwaltung:['Söhngen','Wendt','Flender','Bald','Irle','Born','Büns-Beerwerth','Ordnungsamt','Amt'],
   Extern:['Bürger','Fremdfirma']
 };
+// 04 · Gemeldet durch: zusätzliche Person (Verwaltung) und zusätzliche Gruppe PLS (Personenliste noch leer)
+const MELDER_04 = {...MELDER, Verwaltung:[...MELDER.Verwaltung,'Anke Utsch'], PLS:[]};
+const getPersonenListe=(personId,g)=>((personId||'').indexOf('melder')!==-1?MELDER_04:MELDER)[g]||[];
+window._weitere={f:[],e:[]};
+const weitereEsc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 const ANLAGENTEIL = {
   Kreuztal:['Zulauf','Sandfang','Zwischenklärung','Belebung Vorstufe','Belebung Hauptstufe','Nachklärung','Fällmittelstation','Filtration','Schlammentwässerung','Faulung','Labor','Presse','BHKW','Notumlaufschieber'],
   Buschhütten:['Zulauf','Sandfang','Belebung','Nachklärung','Rücklaufschlammpumpe','Schlammentwässerung','Fällmittelstation'],
@@ -1141,8 +1163,56 @@ window.updateMelderPersonen=(gruppeId,personId,extWrapId)=>{
   const s=document.getElementById(personId);
   const ext=document.getElementById(extWrapId);
   s.innerHTML='<option value="">– Bitte wählen –</option>';
-  (MELDER[g]||[]).forEach(p=>s.insertAdjacentHTML('beforeend',`<option>${p}</option>`));
+  getPersonenListe(personId,g).forEach(p=>s.insertAdjacentHTML('beforeend',`<option>${p}</option>`));
   if(ext) ext.style.display=g==='Extern'?'flex':'none';
+  if(personId==='f-beh-person') renderWeitere('f');
+};
+
+// ── 05 · Weitere Personen (Reiter) ──
+window.renderWeitere=(p)=>{
+  const gSel=document.getElementById(p+'-beh-gruppe');
+  const pSel=document.getElementById(p+'-beh-person');
+  const wrap=document.getElementById(p+'-beh-weitere-wrap');
+  const list=document.getElementById(p+'-beh-weitere-list');
+  const hint=document.getElementById(p+'-beh-weitere-hint');
+  if(!gSel||!pSel||!wrap||!list) return;
+  const g=gSel.value, haupt=pSel.value;
+  const show=!!(g&&g!=='Extern'&&haupt);
+  // Eigene Gruppe zuerst, danach alle anderen Gruppen (ohne Extern)
+  const gruppenNamen=show?[g,...Object.keys(MELDER).filter(k=>k!==g&&k!=='Extern')]:[];
+  const gruppen=gruppenNamen.map(k=>({k,namen:(MELDER[k]||[]).filter(n=>n!==haupt)})).filter(x=>x.namen.length);
+  const kandidaten=gruppen.flatMap(x=>x.namen);
+  window._weitere[p]=(window._weitere[p]||[]).filter(n=>kandidaten.includes(n));
+  const sel=window._weitere[p];
+  wrap.style.display=show?'block':'none';
+  if(!show) toggleWeitere(p,false);
+  if(hint) hint.textContent=show?'Weitere Personen aus allen Gruppen (Mehrfachauswahl)':'';
+  list.style.display='block';
+  list.innerHTML=gruppen.length
+    ? gruppen.map(x=>`<div style="margin-bottom:9px"><div class="weitere-hint" style="margin-bottom:5px">${weitereEsc(x.k)}${x.k===g?' (gleiche Gruppe)':''}</div><div class="dauer-group">${x.namen.map(n=>`<div class="dauer-chip${sel.includes(n)?' selected':''}" data-name="${weitereEsc(n)}" onclick="toggleWeitereChip('${p}',this)">${weitereEsc(n)}</div>`).join('')}</div></div>`).join('')
+    : '<span class="weitere-hint">Keine weiteren Personen hinterlegt</span>';
+  updateWeitereCount(p);
+};
+window.toggleWeitere=(p,force)=>{
+  const panel=document.getElementById(p+'-beh-weitere-panel');
+  const tab=document.getElementById(p+'-beh-weitere-tab');
+  if(!panel||!tab) return;
+  const open=force!==undefined?force:panel.style.display!=='block';
+  panel.style.display=open?'block':'none';
+  tab.classList.toggle('open',open);
+};
+window.toggleWeitereChip=(p,el)=>{
+  const name=el.dataset.name;
+  const arr=window._weitere[p]||(window._weitere[p]=[]);
+  const idx=arr.indexOf(name);
+  if(idx>=0){arr.splice(idx,1);el.classList.remove('selected');}
+  else{arr.push(name);el.classList.add('selected');}
+  updateWeitereCount(p);
+};
+window.updateWeitereCount=(p)=>{
+  const c=document.getElementById(p+'-beh-weitere-count');
+  const n=(window._weitere[p]||[]).length;
+  if(c) c.textContent=n?`(${n})`:'';
 };
 window.setPrio=(btn,prio,cls)=>{
   document.querySelectorAll('.prio-btn').forEach(b=>b.className='prio-btn');
@@ -1263,6 +1333,7 @@ window.addEntry=async()=>{
       datum:date,zeit:time,
       desc:document.getElementById('f-desc').value.trim(),
       melderGruppe,melderPerson,melderTel,behGruppe,behPerson,behTel,
+      behWeitere:(behGruppe&&behGruppe!=='Extern'&&behPerson)?(window._weitere.f||[]).slice():[],
       dauer:currentDauer,
       massnahmen:document.getElementById('f-massnahmen').value.trim(),
       status:document.getElementById('f-status').value,
@@ -1298,6 +1369,7 @@ window.resetForm=()=>{
   document.getElementById('f-time').value=n.toTimeString().slice(0,5);
   document.getElementById('f-extern-wrap').style.display='none';
   document.getElementById('f-beh-extern-wrap').style.display='none';
+  window._weitere.f=[];renderWeitere('f');
   const rzw=document.getElementById('f-rufb-zeit-wrap');if(rzw)rzw.style.display='none';
   document.querySelectorAll('#rufbZeitGroup .rufb-btn').forEach(b=>b.classList.remove('active-rufb'));
   const kaw=document.getElementById('f-kanal-adresse-wrap');if(kaw)kaw.style.display='none';
@@ -1333,8 +1405,8 @@ window.openEditModal=async(id)=>{
   document.getElementById('modal-title').textContent=`✏️ Bearbeiten: STR-${String(e.nr||'?').padStart(4,'0')}`;
 
   // Build person options helper
-  const personOpts=(gruppe,selected)=>{
-    const pList=MELDER[gruppe]||[];
+  const personOpts=(gruppe,selected,pid)=>{
+    const pList=getPersonenListe(pid,gruppe);
     return pList.map(p=>`<option${p===selected?' selected':''}>${p}</option>`).join('');
   };
   const atOpts=(anlage,selected)=>{
@@ -1345,7 +1417,7 @@ window.openEditModal=async(id)=>{
   };
   const artOpts=selected=>artListFor(e.anlage,selected).map(a=>`<option${a===selected?' selected':''}>${a}</option>`).join('');
   const statusOpts=selected=>['Offen','In Arbeit','Behoben'].map(s=>`<option${s===selected?' selected':''}>${s}</option>`).join('');
-  const melderGruppenOpts=sel=>['','Elektriker','Kanal','FAT','Verwaltung','Extern'].map(g=>
+  const melderGruppenOpts=(sel,mitPls)=>['','Elektriker','Kanal','FAT','Verwaltung',...(mitPls?['PLS']:[]),'Extern'].map(g=>
     `<option value="${g}"${g===sel?' selected':''}>${g||'– Bitte wählen –'}</option>`).join('');
   const anlageOpts=sel=>[{v:'',l:'– Bitte wählen –'},{v:'Kreuztal',l:'Kläranlage Kreuztal'},{v:'Buschhütten',l:'Kläranlage Buschhütten'},{v:'Kanal',l:'Kanal'}]
     .map(o=>`<option value="${o.v}"${o.v===sel?' selected':''}>${o.l}</option>`).join('');
@@ -1406,10 +1478,10 @@ window.openEditModal=async(id)=>{
     <div class="edit-section-title">04 · Gemeldet durch</div>
     <div class="edit-grid">
       <label><span class="label-text">Gruppe</span>
-        <select id="e-melder-gruppe" onchange="editUpdatePersonen('e-melder-gruppe','e-melder-person','e-melder-ext-wrap','e-melder-ext-tel-wrap')">${melderGruppenOpts(e.melderGruppe)}</select>
+        <select id="e-melder-gruppe" onchange="editUpdatePersonen('e-melder-gruppe','e-melder-person','e-melder-ext-wrap','e-melder-ext-tel-wrap')">${melderGruppenOpts(e.melderGruppe,true)}</select>
       </label>
       <label><span class="label-text">Person</span>
-        <select id="e-melder-person"><option value="">–</option>${personOpts(e.melderGruppe,e.melderPerson)}</select>
+        <select id="e-melder-person"><option value="">–</option>${personOpts(e.melderGruppe,e.melderPerson,'e-melder-person')}</select>
       </label>
       <label class="full" id="e-melder-ext-wrap" style="display:${e.melderGruppe==='Extern'?'flex':'none'}">
         <span class="label-text">Name (Extern)</span>
@@ -1428,8 +1500,15 @@ window.openEditModal=async(id)=>{
         <select id="e-beh-gruppe" onchange="editUpdatePersonen('e-beh-gruppe','e-beh-person','e-beh-ext-wrap','e-beh-ext-tel-wrap')">${melderGruppenOpts(e.behGruppe)}</select>
       </label>
       <label><span class="label-text">Person</span>
-        <select id="e-beh-person"><option value="">–</option>${personOpts(e.behGruppe,e.behPerson)}</select>
+        <select id="e-beh-person" onchange="renderWeitere('e')"><option value="">–</option>${personOpts(e.behGruppe,e.behPerson,'e-beh-person')}</select>
       </label>
+      <div class="full weitere-wrap" id="e-beh-weitere-wrap" style="display:none">
+        <button type="button" class="weitere-tab" id="e-beh-weitere-tab" onclick="toggleWeitere('e')">👥 Weitere Personen <span id="e-beh-weitere-count"></span></button>
+        <div class="weitere-panel" id="e-beh-weitere-panel">
+          <div class="weitere-hint" id="e-beh-weitere-hint"></div>
+          <div class="dauer-group" id="e-beh-weitere-list"></div>
+        </div>
+      </div>
       <label class="full" id="e-beh-ext-wrap" style="display:${e.behGruppe==='Extern'?'flex':'none'}">
         <span class="label-text">Name (Extern)</span>
         <input type="text" id="e-beh-extern" value="${e.behPerson||''}">
@@ -1478,6 +1557,9 @@ window.openEditModal=async(id)=>{
 
   window._editPrio = e.prio||'niedrig';
   window._editDauer = e.dauer||'';
+  window._weitere.e = Array.isArray(e.behWeitere)?e.behWeitere.slice():[];
+  renderWeitere('e');
+  if(window._weitere.e.length) toggleWeitere('e',true);
   editPendingFiles=[];
 
   document.getElementById('modal-footer').innerHTML=`
@@ -1575,9 +1657,10 @@ window.editUpdatePersonen=(gruppeId,personId,extId,extTelId)=>{
   const ext=document.getElementById(extId);
   const extTel=extTelId?document.getElementById(extTelId):null;
   s.innerHTML='<option value="">–</option>';
-  (MELDER[g]||[]).forEach(p=>s.insertAdjacentHTML('beforeend',`<option>${p}</option>`));
+  getPersonenListe(personId,g).forEach(p=>s.insertAdjacentHTML('beforeend',`<option>${p}</option>`));
   if(ext) ext.style.display=g==='Extern'?'flex':'none';
   if(extTel) extTel.style.display=g==='Extern'?'flex':'none';
+  if(personId==='e-beh-person') renderWeitere('e');
 };
 window.setEditPrio=(btn,prio)=>{
   document.querySelectorAll('#modal-body .prio-btn').forEach(b=>b.className='prio-btn');
@@ -1612,6 +1695,7 @@ window.saveEdit=async(id)=>{
       prio:window._editPrio||'niedrig',
       desc:document.getElementById('e-desc').value.trim(),
       melderGruppe,melderPerson,melderTel,behGruppe,behPerson,behTel,
+      behWeitere:(behGruppe&&behGruppe!=='Extern'&&behPerson)?(window._weitere.e||[]).slice():[],
       dauer:window._editDauer||'',
       status:document.getElementById('e-status').value,
       rufbereitschaft:document.getElementById('e-rufbereitschaft')?.checked||false,
@@ -1654,6 +1738,7 @@ window.openModal=(id)=>{
       <div class="detail-field"><div class="detail-label">Dauer Behebung</div><div class="detail-value">${e.dauer||'–'}</div></div>
       <div class="detail-field"><div class="detail-label">Gemeldet durch</div><div class="detail-value">${melder}</div></div>
       <div class="detail-field"><div class="detail-label">Bearbeitet durch</div><div class="detail-value">${beh}</div></div>
+      ${(e.behWeitere&&e.behWeitere.length)?`<div class="detail-field detail-full"><div class="detail-label">Weitere Personen</div><div class="detail-value">${e.behWeitere.join(', ')}</div></div>`:''}
     </div>
     ${e.desc?`<div class="detail-field" style="margin-bottom:10px"><div class="detail-label">Beschreibung</div><div class="detail-value" style="white-space:pre-wrap;line-height:1.6">${e.desc}</div></div>`:''}
     ${e.massnahmen?`<div class="detail-field"><div class="detail-label">Durchgeführte Maßnahmen</div><div class="detail-value" style="white-space:pre-wrap;line-height:1.6">${e.massnahmen}</div></div>`:''}
@@ -2075,6 +2160,7 @@ window.printSingleEntry=(id)=>{
     <div class="field"><div class="label">Dauer Behebung</div><div class="value">${e.dauer||'–'}</div></div>
     <div class="field"><div class="label">Gemeldet durch</div><div class="value">${melder}</div></div>
     <div class="field"><div class="label">Bearbeitet durch</div><div class="value">${beh}</div></div>
+    ${(e.behWeitere&&e.behWeitere.length)?`<div class="field full"><div class="label">Weitere Personen</div><div class="value">${e.behWeitere.join(', ')}</div></div>`:''}
     ${e.titel?`<div class="field full"><div class="label">Kurzbeschreibung</div><div class="value">${e.titel}</div></div>`:''}
   </div>
   ${e.desc?`<div class="section"><div class="section-title">Beschreibung</div><div class="textarea">${e.desc}</div></div>`:''}
@@ -2094,7 +2180,7 @@ window.printEntries=()=>{
     <td>${e.anlage||''}</td><td>${e.anlagenteil||''}</td><td>${e.anlagenteilDetail||''}</td><td>${e.kanalObjekt||''}</td>
     <td>${e.art||''}</td><td>${e.desc||''}</td><td>${e.prio||''}</td>
     <td>${e.melderGruppe||''} ${e.melderPerson||''}</td>
-    <td>${e.behGruppe||''} ${e.behPerson||''}</td>
+    <td>${e.behGruppe||''} ${e.behPerson||''}${(e.behWeitere&&e.behWeitere.length)?' + '+e.behWeitere.join(', '):''}</td>
     <td>${e.dauer||''}</td><td>${e.massnahmen||''}</td><td>${e.status||''}</td>
   </tr>`).join('');
   window.print();
@@ -2327,7 +2413,7 @@ async function runExcelExport(monthKey){
     // ── 1) Rohdaten ──
     const headers=['Nr.','Datum','Uhrzeit','Anlage','Bereich','Detail','Bauwerk','Störungsart','Priorität','Beschreibung',
       'Gemeldet (Gruppe)','Gemeldet (Person)','Gemeldet (Telefon)','Bearbeitet (Gruppe)','Bearbeitet (Person)','Bearbeitet (Telefon)',
-      'Dauer','Dauer (h)','Rufbereitschaft','Rufbereitschaft Zeitraum','Maßnahmen','Status'];
+      'Dauer','Dauer (h)','Rufbereitschaft','Rufbereitschaft Zeitraum','Maßnahmen','Status','Weitere Personen (Behebung)'];
     const rd=workbook.addWorksheet('Rohdaten');
     rd.addRow(headers);
     rd.getRow(1).eachCell(c=>{
@@ -2342,10 +2428,10 @@ async function runExcelExport(monthKey){
         e.behGruppe||'',e.behPerson||'',e.behTel||'',e.dauer||'',
         (e.dauer&&DAUERH[e.dauer]!==undefined)?DAUERH[e.dauer]:'',
         e.rufbereitschaft?'Ja':'Nein',e.rufbereitschaftZeit||'',
-        e.massnahmen||'',e.status||''
+        e.massnahmen||'',e.status||'',(e.behWeitere||[]).join(', ')
       ]);
     });
-    rd.columns.forEach((col,i)=>{col.width=[10,11,8,13,20,16,20,18,10,32,14,14,14,14,14,14,7,9,12,20,32,11][i]||14;});
+    rd.columns.forEach((col,i)=>{col.width=[10,11,8,13,20,16,20,18,10,32,14,14,14,14,14,14,7,9,12,20,32,11,26][i]||14;});
     rd.autoFilter={from:'A1',to:`${rd.getColumn(headers.length).letter}1`};
     rd.views=[{state:'frozen',ySplit:1}];
 
